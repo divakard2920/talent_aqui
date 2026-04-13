@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     upload_dir: str = "./uploads"
     max_file_size_mb: int = 10
 
+    # GitHub (optional - for higher rate limits)
+    github_access_token: str | None = None
+
     class Config:
         env_file = ".env"
 

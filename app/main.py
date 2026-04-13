@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.models.database import init_db
-from app.api.routes import jobs, resume, candidates
+from app.api.routes import jobs, resume, candidates, github
 
 
 @asynccontextmanager
@@ -34,6 +34,7 @@ app.add_middleware(
 app.include_router(jobs.router, prefix="/api")
 app.include_router(resume.router, prefix="/api")
 app.include_router(candidates.router, prefix="/api")
+app.include_router(github.router, prefix="/api")
 
 
 @app.get("/")

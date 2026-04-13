@@ -1,0 +1,340 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&display=swap');
+
+:root {
+  --bg-color: #FAFAFA;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F8F9FA;
+
+  --text-primary: #1F1F1F;
+  --text-secondary: #4A4A4A;
+  --text-muted: #8E8E8E;
+
+  --brand-navy: #003B7E;
+  --accent-blue: #0072C6;
+  --accent-light-blue: #4A90E2;
+
+  --border-light: rgba(0, 0, 0, 0.05);
+  --border-strong: rgba(0, 0, 0, 0.1);
+
+  --font-serif: 'Playfair Display', serif;
+  --font-sans: 'Manrope', sans-serif;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.08);
+
+  --btn-shadow-inset: inset 0 2px 4px rgba(255, 255, 255, 0.2);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Sarvam AI Inspired Aura Mesh Gradient */
+.mesh-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  background-color: var(--bg-color);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.mesh-background::before,
+.mesh-background::after,
+.mesh-background-glow {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(140px);
+  opacity: 0.5;
+  transition: all 2s ease;
+}
+
+.mesh-background::before {
+  top: -150px;
+  left: 10%;
+  width: 60vw;
+  height: 500px;
+  background: var(--brand-navy);
+  opacity: 0.4;
+}
+
+.mesh-background::after {
+  bottom: -100px;
+  right: -50px;
+  width: 70vw;
+  height: 600px;
+  background: var(--accent-blue);
+  opacity: 0.35;
+}
+
+.mesh-background-glow {
+  top: 40%;
+  left: -20%;
+  width: 500px;
+  height: 500px;
+  background: var(--accent-light-blue);
+  opacity: 0.25;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+a {
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+a:hover {
+  opacity: 0.7;
+}
+
+button {
+  font-family: var(--font-sans);
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+/* Sovereign UI Cards */
+.sovereign-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 32px;
+  padding: 32px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+}
+
+.sovereign-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+
+/* Premium Primary Button */
+.btn-sarvam {
+  background-color: #131313;
+  color: #FFFFFF;
+  padding: 14px 32px;
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+  box-shadow: var(--btn-shadow-inset), var(--shadow-sm);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-sarvam:hover {
+  transform: scale(0.98);
+  background-color: #000000;
+  box-shadow: var(--btn-shadow-inset), 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-sarvam:active {
+  transform: scale(0.95);
+}
+
+/* Secondary Button / Pills */
+.btn-pill {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  padding: 10px 24px;
+  border-radius: 9999px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-pill:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--text-primary);
+}
+
+/* Inputs */
+.input-elegant {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  padding: 16px 24px;
+  border-radius: 9999px;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  width: 100%;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(8px);
+}
+
+.input-elegant::placeholder {
+  color: var(--text-muted);
+}
+
+.input-elegant:focus {
+  outline: none;
+  background: #FFFFFF;
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Chips / Tags */
+.chip {
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.chip-navy {
+  background: #E6F0F9;
+  color: var(--brand-navy);
+}
+
+.chip-blue {
+  background: #E8EEF8;
+  color: #2F5C8F;
+}
+
+.chip-green {
+  background: #E4F5E9;
+  color: #287A4F;
+}
+
+/* Utilities */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Gap Utilities */
+.gap-1 {
+  gap: 0.25rem;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-3 {
+  gap: 0.75rem;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.gap-6 {
+  gap: 1.5rem;
+}
+
+.gap-8 {
+  gap: 2rem;
+}
+
+/* Layout container */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Spinner animation */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Toast / Alert styles */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--text-primary);
+  color: white;
+  padding: 16px 24px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+}
+
+/* Disabled button state */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Link styles in cards */
+.sovereign-card a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.sovereign-card a:hover {
+  opacity: 0.8;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .container {
+    padding: 0 16px;
+  }
+
+  h1 {
+    font-size: 2.5rem !important;
+  }
+
+  h2 {
+    font-size: 2rem !important;
+  }
+}
