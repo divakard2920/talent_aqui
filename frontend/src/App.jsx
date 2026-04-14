@@ -29,7 +29,7 @@ import {
 import './index.css';
 import knorrLogo from './assets/knorr.png';
 import { jobsApi, candidatesApi, resumeApi, githubApi } from './services/api';
-import { Modal, JobForm, GitHubSearchForm, GitHubCandidateCard, ResumeUpload, CandidateResult } from './components';
+import { Modal, JobForm, GitHubSearchForm, GitHubCandidateCard, ResumeUpload, CandidateResult, ConfirmDialog } from './components';
 
 // Simple SVG icons for GitHub and LinkedIn
 const GithubIcon = ({ size = 24, ...props }) => (
@@ -43,6 +43,16 @@ const LinkedinIcon = ({ size = 24, ...props }) => (
     <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
   </svg>
 );
+
+// Helper to normalize names to Title Case
+const formatName = (name) => {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
 
 // Toast notification component
 function Toast({ message, type = 'success', onClose }) {
@@ -304,10 +314,10 @@ function DashboardView({ onNavigate }) {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   <div style={{ width: '48px', height: '48px', background: 'var(--text-primary)', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
-                    {candidate.name?.charAt(0) || '?'}
+                    {formatName(candidate.name)?.charAt(0) || '?'}
                   </div>
                   <div style={{ textAlign: 'left' }}>
-                    <h4 style={{ fontSize: '1.1rem', marginBottom: '2px' }}>{candidate.name}</h4>
+                    <h4 style={{ fontSize: '1.1rem', marginBottom: '2px' }}>{formatName(candidate.name)}</h4>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>{candidate.email}</p>
                   </div>
                 </div>
@@ -334,6 +344,8 @@ function JobsView({ showToast, onViewCandidate }) {
   const [loadingMatches, setLoadingMatches] = useState(false);
   const [shortlistingId, setShortlistingId] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'shortlisted', 'rejected', 'pending'
+  const [screeningJobId, setScreeningJobId] = useState(null); // Track job being screened
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: 'warning', title: '', message: '', onConfirm: null });
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -357,7 +369,8 @@ function JobsView({ showToast, onViewCandidate }) {
       const res = await jobsApi.create(data);
       setJobs(prev => [res.data, ...prev]);
       setShowCreateModal(false);
-      showToast('Job created! AI is screening candidates in the background...');
+      setScreeningJobId(res.data.id);
+      showToast('Job created! AI is screening candidates in the background...', 'info');
     } catch (err) {
       showToast('Failed to create job: ' + (err.response?.data?.detail || err.message), 'error');
     } finally {
@@ -378,15 +391,23 @@ function JobsView({ showToast, onViewCandidate }) {
     }
   };
 
-  const handleDeleteJob = async (job) => {
-    if (!confirm(`Delete "${job.title}"? This cannot be undone.`)) return;
-    try {
-      await jobsApi.delete(job.id);
-      setJobs(prev => prev.filter(j => j.id !== job.id));
-      showToast('Job deleted');
-    } catch (err) {
-      showToast('Failed to delete job: ' + (err.response?.data?.detail || err.message), 'error');
-    }
+  const handleDeleteJob = (job) => {
+    setConfirmDialog({
+      isOpen: true,
+      type: 'danger',
+      title: 'Delete Job',
+      message: `Are you sure you want to delete "${job.title}"? This will also remove all candidate matches for this job. This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await jobsApi.delete(job.id);
+          setJobs(prev => prev.filter(j => j.id !== job.id));
+          showToast('Job deleted');
+        } catch (err) {
+          showToast('Failed to delete job: ' + (err.response?.data?.detail || err.message), 'error');
+        }
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
   const handleViewMatches = async (job) => {
@@ -396,6 +417,10 @@ function JobsView({ showToast, onViewCandidate }) {
     try {
       const res = await jobsApi.getMatches(job.id);
       setJobMatches(res.data);
+      // Clear screening indicator only when we have matches
+      if (res.data?.matches?.length > 0 && screeningJobId === job.id) {
+        setScreeningJobId(null);
+      }
     } catch (err) {
       console.error('Failed to fetch matches:', err);
       setJobMatches({ matches: [] });
@@ -404,18 +429,25 @@ function JobsView({ showToast, onViewCandidate }) {
     }
   };
 
-  const handleRescreen = async (job) => {
-    try {
-      await jobsApi.rescreen(job.id);
-      showToast(`Re-screening started for "${job.title}"!`);
-      setTimeout(() => {
-        if (selectedJob?.id === job.id) {
-          handleViewMatches(job);
+  const handleRescreen = (job) => {
+    setConfirmDialog({
+      isOpen: true,
+      type: 'info',
+      title: 'Re-screen Candidates',
+      message: `Do you want to re-screen candidates for "${job.title}"? This will re-evaluate only pending candidates. Shortlisted and rejected candidates will be skipped.`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          await jobsApi.rescreen(job.id);
+          setScreeningJobId(job.id);
+          // Clear current matches to show screening progress state in modal
+          setJobMatches({ matches: [], total_matches: 0 });
+          showToast(`Re-screening started for "${job.title}"!`, 'info');
+        } catch {
+          showToast('Failed to start re-screening', 'error');
         }
-      }, 3000);
-    } catch {
-      showToast('Failed to start re-screening', 'error');
-    }
+      },
+    });
   };
 
   const handleShortlist = async (matchId, status) => {
@@ -487,7 +519,35 @@ function JobsView({ showToast, onViewCandidate }) {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                     <span className="chip chip-navy">{job.department || 'General'}</span>
-                    <span className="chip chip-green">{job.status}</span>
+                    <span
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: '9999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                        background: job.status === 'open' ? '#E4F5E9' : job.status === 'on_hold' ? '#FEF3C7' : '#FEE2E2',
+                        color: job.status === 'open' ? '#287A4F' : job.status === 'on_hold' ? '#92400E' : '#DC2626',
+                      }}
+                    >
+                      {job.status === 'open' ? 'Open' : job.status === 'on_hold' ? 'On Hold' : 'Closed'}
+                    </span>
+                    {screeningJobId === job.id && (
+                      <span
+                        style={{
+                          padding: '4px 12px',
+                          borderRadius: '9999px',
+                          fontSize: '0.75rem',
+                          fontWeight: 500,
+                          background: '#E0E7FF',
+                          color: '#4338CA',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Loader2 size={12} className="spin" /> Screening candidates...
+                      </span>
+                    )}
                     {job.location && <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{job.location}</span>}
                   </div>
                   <h3 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>{job.title}</h3>
@@ -562,14 +622,29 @@ function JobsView({ showToast, onViewCandidate }) {
           </div>
         ) : jobMatches?.matches?.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px' }}>
-            <Users size={56} color="var(--text-muted)" style={{ marginBottom: '20px' }} />
-            <h3 style={{ marginBottom: '8px', fontSize: '1.3rem' }}>No Matches Yet</h3>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '24px', maxWidth: '300px', margin: '0 auto 24px' }}>
-              Screening is in progress or no candidates have been matched to this job yet.
-            </p>
-            <button className="btn-sarvam" onClick={() => handleRescreen(selectedJob)}>
-              <RefreshCw size={16} /> Run Screening
-            </button>
+            {screeningJobId === selectedJob?.id ? (
+              <>
+                <Loader2 size={56} className="spin" color="var(--brand-navy)" style={{ marginBottom: '20px' }} />
+                <h3 style={{ marginBottom: '8px', fontSize: '1.3rem' }}>Screening in Progress</h3>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '24px', maxWidth: '350px', margin: '0 auto 24px' }}>
+                  AI is analyzing candidates against this job's requirements. This may take a minute.
+                </p>
+                <button className="btn-sarvam" onClick={() => handleViewMatches(selectedJob)}>
+                  <RefreshCw size={16} /> Check for Results
+                </button>
+              </>
+            ) : (
+              <>
+                <Users size={56} color="var(--text-muted)" style={{ marginBottom: '20px' }} />
+                <h3 style={{ marginBottom: '8px', fontSize: '1.3rem' }}>No Matches Yet</h3>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '24px', maxWidth: '300px', margin: '0 auto 24px' }}>
+                  No candidates have been matched to this job yet. Run screening to find matches.
+                </p>
+                <button className="btn-sarvam" onClick={() => handleRescreen(selectedJob)}>
+                  <RefreshCw size={16} /> Run Screening
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -656,7 +731,7 @@ function JobsView({ showToast, onViewCandidate }) {
                         fontSize: '1.3rem',
                         fontWeight: 500,
                       }}>
-                        {match.source === 'github' ? <GithubIcon size={24} /> : match.candidate_name?.charAt(0) || '?'}
+                        {match.source === 'github' ? <GithubIcon size={24} /> : formatName(match.candidate_name)?.charAt(0) || '?'}
                       </div>
                       <div style={{
                         width: '56px',
@@ -678,7 +753,7 @@ function JobsView({ showToast, onViewCandidate }) {
                     {/* Middle: Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                        <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{match.candidate_name}</h4>
+                        <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{formatName(match.candidate_name)}</h4>
                         {match.status === 'shortlisted' && <span style={{ background: '#E4F5E9', color: '#287A4F', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>Shortlisted</span>}
                         {match.status === 'rejected' && <span style={{ background: '#FEE2E2', color: '#DC2626', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>Rejected</span>}
                         {i === 0 && filterStatus === 'all' && match.status === 'pending' && <span style={{ background: '#FEF3C7', color: '#92400E', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>Top Match</span>}
@@ -690,7 +765,7 @@ function JobsView({ showToast, onViewCandidate }) {
                           <a
                             href={`mailto:${match.candidate_email}`}
                             style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.85rem' }}
-                            title={`Email ${match.candidate_name}`}
+                            title={`Email ${formatName(match.candidate_name)}`}
                           >
                             <Mail size={14} /> {match.candidate_email}
                           </a>
@@ -836,6 +911,17 @@ function JobsView({ showToast, onViewCandidate }) {
           </div>
         )}
       </Modal>
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        type={confirmDialog.type}
+        confirmText={confirmDialog.type === 'danger' ? 'Delete' : 'Confirm'}
+      />
     </motion.div>
   );
 }
@@ -854,6 +940,8 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   const [loadingMatches, setLoadingMatches] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [matchingJob, setMatchingJob] = useState(null);
+  const [showAllSkills, setShowAllSkills] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: 'warning', title: '', message: '', onConfirm: null });
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
@@ -910,6 +998,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   const handleViewCandidate = async (candidate) => {
     setSelectedCandidate(candidate);
     setShowDetailModal(true);
+    setShowAllSkills(false);
     setLoadingMatches(true);
     try {
       const res = await candidatesApi.getMatches(candidate.id);
@@ -922,15 +1011,23 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     }
   };
 
-  const handleDeleteCandidate = async (candidate) => {
-    if (!confirm(`Delete "${candidate.name}"? This cannot be undone.`)) return;
-    try {
-      await candidatesApi.delete(candidate.id);
-      setCandidates(prev => prev.filter(c => c.id !== candidate.id));
-      showToast('Candidate deleted');
-    } catch {
-      showToast('Failed to delete candidate', 'error');
-    }
+  const handleDeleteCandidate = (candidate) => {
+    setConfirmDialog({
+      isOpen: true,
+      type: 'danger',
+      title: 'Delete Candidate',
+      message: `Are you sure you want to delete "${formatName(candidate.name)}"? This will also remove all job matches for this candidate. This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await candidatesApi.delete(candidate.id);
+          setCandidates(prev => prev.filter(c => c.id !== candidate.id));
+          showToast('Candidate deleted');
+        } catch {
+          showToast('Failed to delete candidate', 'error');
+        }
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
   const handleMatchToJob = async (candidateId, jobId) => {
@@ -952,6 +1049,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setShowDetailModal(false);
     setSelectedCandidate(null);
     setCandidateMatches([]);
+    setShowAllSkills(false);
   };
 
   const filteredCandidates = candidates.filter(c =>
@@ -1211,12 +1309,44 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
             {selectedCandidate.parsed_data?.skills?.length > 0 && (
               <div>
                 <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Skills</h4>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {selectedCandidate.parsed_data.skills.slice(0, 20).map((skill, i) => (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                  {(showAllSkills
+                    ? selectedCandidate.parsed_data.skills
+                    : selectedCandidate.parsed_data.skills.slice(0, 20)
+                  ).map((skill, i) => (
                     <span key={i} className="chip chip-navy" style={{ fontSize: '0.8rem' }}>{skill}</span>
                   ))}
-                  {selectedCandidate.parsed_data.skills.length > 20 && (
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>+{selectedCandidate.parsed_data.skills.length - 20} more</span>
+                  {selectedCandidate.parsed_data.skills.length > 20 && !showAllSkills && (
+                    <button
+                      onClick={() => setShowAllSkills(true)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        fontSize: '0.8rem',
+                        color: 'var(--brand-navy)',
+                        cursor: 'pointer',
+                        padding: '4px 8px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      +{selectedCandidate.parsed_data.skills.length - 20} more
+                    </button>
+                  )}
+                  {showAllSkills && selectedCandidate.parsed_data.skills.length > 20 && (
+                    <button
+                      onClick={() => setShowAllSkills(false)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        fontSize: '0.8rem',
+                        color: 'var(--brand-navy)',
+                        cursor: 'pointer',
+                        padding: '4px 8px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      Show less
+                    </button>
                   )}
                 </div>
               </div>
@@ -1276,6 +1406,17 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
           </div>
         )}
       </Modal>
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        type={confirmDialog.type}
+        confirmText="Delete"
+      />
     </motion.div>
   );
 }
@@ -1298,12 +1439,12 @@ function CandidateCard({ candidate, onView, onDelete }) {
           fontSize: '1.3rem',
           flexShrink: 0,
         }}>
-          {candidate.source === 'github' ? <GithubIcon size={24} /> : candidate.name?.charAt(0) || '?'}
+          {candidate.source === 'github' ? <GithubIcon size={24} /> : formatName(candidate.name)?.charAt(0) || '?'}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-            <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{candidate.name}</h4>
+            <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{formatName(candidate.name)}</h4>
             <span className="chip chip-blue" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>{candidate.source}</span>
           </div>
 

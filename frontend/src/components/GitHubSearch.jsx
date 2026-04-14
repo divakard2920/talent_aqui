@@ -14,6 +14,16 @@ const LinkedinIcon = ({ size = 24, ...props }) => (
   </svg>
 );
 
+// Helper to normalize names to Title Case
+const formatName = (name) => {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
 export function GitHubSearchForm({ onSearch, onSourceForJob, loading, jobs = [] }) {
   const openJobs = jobs.filter(j => j.status === 'open');
   const [mode, setMode] = useState('manual'); // 'manual' or 'job'
@@ -229,12 +239,12 @@ export function GitHubCandidateCard({ candidate, onImport, importing }) {
       <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
         <img
           src={candidate.avatar_url}
-          alt={candidate.name}
+          alt={formatName(candidate.name)}
           style={{ width: '56px', height: '56px', borderRadius: '50%', border: '2px solid var(--border-light)' }}
         />
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{candidate.name}</h4>
+            <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{formatName(candidate.name)}</h4>
             {candidate.hireable && <span className="chip chip-green" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>Hireable</span>}
           </div>
           <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>@{candidate.source_id}</p>

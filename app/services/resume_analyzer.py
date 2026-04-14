@@ -1,3 +1,4 @@
+from datetime import date
 from app.services.azure_openai import azure_openai_service
 from app.schemas.candidate import ParsedResumeData
 
@@ -7,6 +8,8 @@ class ResumeAnalyzer:
 
     PARSE_RESUME_PROMPT = """You are an expert resume parser. Analyze the following resume text and extract structured information.
 
+IMPORTANT: Today's date is {current_date}. Use this when calculating experience duration for "Present" or "Current" positions.
+
 Return a JSON object with the following fields:
 - name: Full name of the candidate
 - email: Email address
@@ -14,10 +17,16 @@ Return a JSON object with the following fields:
 - location: City, State/Country
 - summary: Brief professional summary (2-3 sentences)
 - skills: List of technical and soft skills
-- experience: List of work experiences, each with: company, title, start_date, end_date, description
+- experience: List of work experiences, each with: company, title, start_date, end_date (use "Present" if current job), description
 - education: List of education entries, each with: institution, degree, field, graduation_year
 - certifications: List of certifications
-- total_years_experience: Estimated total years of professional experience (as a number)
+- total_years_experience: Total years of professional experience (as a decimal number, e.g., 3.9 for 3 years 11 months)
+
+CRITICAL for total_years_experience calculation:
+1. Calculate the duration from the EARLIEST start_date to TODAY ({current_date}), NOT the sum of individual job durations
+2. If jobs overlap, count that time only ONCE
+3. For "Present" or "Current" positions, use today's date ({current_date}) as the end date
+4. Example: If someone started their first job in May 2022 and is still working (April 2026), that's approximately 3.9 years, NOT the sum of all job durations
 
 Resume Text:
 {resume_text}
@@ -26,6 +35,7 @@ Return ONLY valid JSON, no additional text."""
 
     def parse_resume(self, resume_text: str) -> ParsedResumeData:
         """Parse resume text and extract structured data."""
+        current_date = date.today().strftime("%B %Y")  # e.g., "April 2026"
         messages = [
             {
                 "role": "system",
@@ -33,7 +43,10 @@ Return ONLY valid JSON, no additional text."""
             },
             {
                 "role": "user",
-                "content": self.PARSE_RESUME_PROMPT.format(resume_text=resume_text),
+                "content": self.PARSE_RESUME_PROMPT.format(
+                    resume_text=resume_text,
+                    current_date=current_date
+                ),
             },
         ]
 

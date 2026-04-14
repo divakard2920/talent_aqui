@@ -66,7 +66,13 @@ async def screen_candidates_for_job(job_id: int):
                     existing_match = result.scalar_one_or_none()
 
                     if existing_match:
-                        # Update existing match
+                        # Skip rejected and shortlisted candidates during rescreening
+                        # - Rejected: recruiter decided they're not a fit
+                        # - Shortlisted: recruiter already approved, no need to re-evaluate
+                        if existing_match.status in ("rejected", "shortlisted"):
+                            print(f"[Auto-Screen] Skipping {existing_match.status} candidate {candidate.id}")
+                            continue
+                        # Update existing match (only pending candidates)
                         existing_match.overall_score = match_result.get("overall_score")
                         existing_match.skills_score = match_result.get("skills_score")
                         existing_match.experience_score = match_result.get("experience_score")
