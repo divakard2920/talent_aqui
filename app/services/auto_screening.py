@@ -28,6 +28,11 @@ async def screen_candidates_for_job(job_id: int):
                 print(f"[Auto-Screen] Job {job_id} not found")
                 return
 
+            # Only screen for open jobs
+            if job.status != "open":
+                print(f"[Auto-Screen] Skipping job {job_id} - status is '{job.status}', not 'open'")
+                return
+
             print(f"[Auto-Screen] Starting screening for job: {job.title} (ID: {job_id})")
 
             # Get all candidates with parsed data

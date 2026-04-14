@@ -81,9 +81,15 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [scrolled, setScrolled] = useState(false);
   const [toast, setToast] = useState(null);
+  const [viewCandidateId, setViewCandidateId] = useState(null);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
+  };
+
+  const handleViewCandidate = (candidateId) => {
+    setViewCandidateId(candidateId);
+    setActiveTab('candidates');
   };
 
   useEffect(() => {
@@ -162,8 +168,8 @@ function App() {
       <main className="container" style={{ paddingTop: '140px', paddingBottom: '80px' }}>
         <AnimatePresence mode="wait">
           {activeTab === 'dashboard' && <DashboardView key="dashboard" onNavigate={setActiveTab} />}
-          {activeTab === 'jobs' && <JobsView key="jobs" showToast={showToast} />}
-          {activeTab === 'candidates' && <CandidatesView key="candidates" showToast={showToast} />}
+          {activeTab === 'jobs' && <JobsView key="jobs" showToast={showToast} onViewCandidate={handleViewCandidate} />}
+          {activeTab === 'candidates' && <CandidatesView key="candidates" showToast={showToast} viewCandidateId={viewCandidateId} clearViewCandidateId={() => setViewCandidateId(null)} />}
           {activeTab === 'github' && <GitHubView key="github" showToast={showToast} />}
         </AnimatePresence>
       </main>
@@ -316,7 +322,7 @@ function DashboardView({ onNavigate }) {
 }
 
 // --- Jobs View ---
-function JobsView({ showToast }) {
+function JobsView({ showToast, onViewCandidate }) {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -541,6 +547,7 @@ function JobsView({ showToast }) {
               skills_preferred: selectedJob.skills_preferred?.join(', ') || '',
               salary_min: selectedJob.salary_min || '',
               salary_max: selectedJob.salary_max || '',
+              status: selectedJob.status || 'open',
             }}
             buttonText="Update Job"
           />
@@ -548,125 +555,284 @@ function JobsView({ showToast }) {
       </Modal>
 
       {/* Job Matches Modal */}
-      <Modal isOpen={showDetailModal} onClose={closeDetailModal} title={selectedJob ? `Matches for: ${selectedJob.title}` : ''} size="xl">
+      <Modal isOpen={showDetailModal} onClose={closeDetailModal} title="" size="xl">
         {loadingMatches ? (
           <div className="flex-center" style={{ padding: '60px' }}>
             <Loader2 size={32} className="spin" />
           </div>
         ) : jobMatches?.matches?.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <Users size={48} color="var(--text-muted)" style={{ marginBottom: '16px' }} />
-            <h3 style={{ marginBottom: '8px' }}>No Matches Yet</h3>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
-              Screening is in progress or no candidates match this job.
+          <div style={{ textAlign: 'center', padding: '60px' }}>
+            <Users size={56} color="var(--text-muted)" style={{ marginBottom: '20px' }} />
+            <h3 style={{ marginBottom: '8px', fontSize: '1.3rem' }}>No Matches Yet</h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '24px', maxWidth: '300px', margin: '0 auto 24px' }}>
+              Screening is in progress or no candidates have been matched to this job yet.
             </p>
-            <button className="btn-pill" onClick={() => handleRescreen(selectedJob)}>
-              <RefreshCw size={16} /> Re-screen Candidates
+            <button className="btn-sarvam" onClick={() => handleRescreen(selectedJob)}>
+              <RefreshCw size={16} /> Run Screening
             </button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="flex-between" style={{ flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Filter:</span>
-                {['all', 'shortlisted', 'pending', 'rejected'].map(status => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Header */}
+            <div style={{ background: 'linear-gradient(135deg, var(--brand-navy) 0%, #4A7AB8 100%)', padding: '24px', borderRadius: '16px', color: 'white' }}>
+              <h2 style={{ margin: '0 0 8px', fontSize: '1.4rem' }}>{selectedJob?.title}</h2>
+              <p style={{ margin: 0, opacity: 0.8, fontSize: '0.9rem' }}>{selectedJob?.department} • {selectedJob?.location || 'Remote'}</p>
+              <div style={{ display: 'flex', gap: '24px', marginTop: '20px' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '2rem', fontWeight: 700 }}>{jobMatches?.total_matches}</p>
+                  <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.8 }}>Total Matches</p>
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: '2rem', fontWeight: 700 }}>{jobMatches?.matches?.filter(m => m.status === 'shortlisted').length || 0}</p>
+                  <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.8 }}>Shortlisted</p>
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: '2rem', fontWeight: 700 }}>{jobMatches?.matches?.filter(m => m.status === 'pending').length || 0}</p>
+                  <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.8 }}>Pending Review</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Tabs */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', background: '#F4F4F4', borderRadius: '12px', padding: '4px' }}>
+                {['all', 'pending', 'shortlisted', 'rejected'].map(status => (
                   <button
                     key={status}
-                    className="btn-pill"
-                    style={{
-                      padding: '6px 12px',
-                      fontSize: '0.8rem',
-                      background: filterStatus === status ? 'var(--brand-navy)' : 'transparent',
-                      color: filterStatus === status ? 'white' : 'var(--text-secondary)',
-                    }}
                     onClick={() => setFilterStatus(status)}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: filterStatus === status ? 'white' : 'transparent',
+                      boxShadow: filterStatus === status ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: filterStatus === status ? 600 : 400,
+                      color: filterStatus === status ? 'var(--brand-navy)' : 'var(--text-muted)',
+                      transition: 'all 0.2s',
+                    }}
                   >
                     {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
-                    {status !== 'all' && ` (${jobMatches?.matches?.filter(m => m.status === status).length || 0})`}
                   </button>
                 ))}
               </div>
               <button className="btn-pill" onClick={() => handleRescreen(selectedJob)}>
-                <RefreshCw size={16} /> Re-screen
+                <RefreshCw size={14} /> Re-screen
               </button>
             </div>
-            <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.85rem' }}>
-              Showing {filterStatus === 'all' ? jobMatches?.total_matches : jobMatches?.matches?.filter(m => m.status === filterStatus).length} candidates
-            </p>
-            {jobMatches?.matches?.filter(m => filterStatus === 'all' || m.status === filterStatus).map((match, i) => (
-              <div
-                key={match.match_id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '16px',
-                  padding: '16px',
-                  background: match.status === 'shortlisted' ? '#E4F5E9' : match.status === 'rejected' ? '#FEE2E2' : i === 0 ? '#E8EEF8' : '#FAFAFA',
-                  borderRadius: '16px',
-                  border: match.status === 'shortlisted' ? '2px solid #287A4F' : match.status === 'rejected' ? '2px solid #DC2626' : '1px solid var(--border-light)',
-                }}
-              >
-                <div style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '50%',
-                  background: 'var(--brand-navy)',
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '1.2rem',
-                  flexShrink: 0,
-                }}>
-                  {match.candidate_name?.charAt(0) || '?'}
-                </div>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <h4 style={{ margin: 0, fontSize: '1rem' }}>{match.candidate_name}</h4>
-                    {match.status === 'shortlisted' && <span className="chip chip-green" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>Shortlisted</span>}
-                    {match.status === 'rejected' && <span style={{ fontSize: '0.7rem', padding: '2px 8px', background: '#FEE2E2', color: '#DC2626', borderRadius: '9999px' }}>Rejected</span>}
-                    {i === 0 && match.status === 'pending' && <span className="chip chip-blue" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>Top Match</span>}
+            {/* Candidate Cards */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {jobMatches?.matches?.filter(m => filterStatus === 'all' || m.status === filterStatus).map((match, i) => (
+                <div
+                  key={match.match_id}
+                  style={{
+                    background: 'white',
+                    borderRadius: '16px',
+                    border: '1px solid var(--border-light)',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                  }}
+                >
+                  {/* Top accent bar */}
+                  <div style={{
+                    height: '4px',
+                    background: match.status === 'shortlisted' ? '#287A4F' : match.status === 'rejected' ? '#DC2626' : match.overall_score >= 80 ? '#287A4F' : match.overall_score >= 60 ? '#2F5C8F' : '#E5E5E5',
+                  }} />
+
+                  <div style={{ padding: '20px', display: 'flex', gap: '20px' }}>
+                    {/* Left: Avatar & Score */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                      <div style={{
+                        width: '56px',
+                        height: '56px',
+                        borderRadius: '50%',
+                        background: match.source === 'github' ? '#24292e' : 'linear-gradient(135deg, var(--brand-navy) 0%, #4A7AB8 100%)',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.3rem',
+                        fontWeight: 500,
+                      }}>
+                        {match.source === 'github' ? <GithubIcon size={24} /> : match.candidate_name?.charAt(0) || '?'}
+                      </div>
+                      <div style={{
+                        width: '56px',
+                        height: '56px',
+                        borderRadius: '12px',
+                        background: match.overall_score >= 80 ? '#E4F5E9' : match.overall_score >= 60 ? '#E8EEF8' : '#F4F4F4',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        <span style={{ fontSize: '1.3rem', fontWeight: 700, color: match.overall_score >= 80 ? '#287A4F' : match.overall_score >= 60 ? '#2F5C8F' : 'var(--text-primary)' }}>
+                          {Math.round(match.overall_score)}
+                        </span>
+                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>SCORE</span>
+                      </div>
+                    </div>
+
+                    {/* Middle: Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                        <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{match.candidate_name}</h4>
+                        {match.status === 'shortlisted' && <span style={{ background: '#E4F5E9', color: '#287A4F', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>Shortlisted</span>}
+                        {match.status === 'rejected' && <span style={{ background: '#FEE2E2', color: '#DC2626', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>Rejected</span>}
+                        {i === 0 && filterStatus === 'all' && match.status === 'pending' && <span style={{ background: '#FEF3C7', color: '#92400E', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>Top Match</span>}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
+                        {/* Contact Icons */}
+                        {match.candidate_email && (
+                          <a
+                            href={`mailto:${match.candidate_email}`}
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.85rem' }}
+                            title={`Email ${match.candidate_name}`}
+                          >
+                            <Mail size={14} /> {match.candidate_email}
+                          </a>
+                        )}
+                        {match.candidate_location && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            <MapPin size={14} /> {match.candidate_location}
+                          </span>
+                        )}
+                        {match.parsed_data?.github_profile?.profile_url && (
+                          <a
+                            href={match.parsed_data.github_profile.profile_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#24292e', textDecoration: 'none', fontSize: '0.85rem' }}
+                            title="GitHub Profile"
+                          >
+                            <GithubIcon size={14} />
+                          </a>
+                        )}
+                        {match.parsed_data?.linkedin_url && (
+                          <a
+                            href={match.parsed_data.linkedin_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#0A66C2', textDecoration: 'none', fontSize: '0.85rem' }}
+                            title="LinkedIn Profile"
+                          >
+                            <LinkedinIcon size={14} />
+                          </a>
+                        )}
+                        <button
+                          onClick={() => onViewCandidate(match.candidate_id)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            color: 'var(--brand-navy)',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            padding: 0,
+                          }}
+                        >
+                          <Eye size={14} /> View Profile
+                        </button>
+                      </div>
+
+                      {/* Score Breakdown */}
+                      <div style={{ display: 'flex', gap: '16px', marginBottom: '12px' }}>
+                        {[
+                          { label: 'Skills', score: match.skills_score },
+                          { label: 'Experience', score: match.experience_score },
+                          { label: 'Education', score: match.education_score },
+                        ].map(item => item.score != null && (
+                          <div key={item.label} style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '4px' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>{item.label}</span>
+                              <span style={{ fontWeight: 600 }}>{Math.round(item.score)}</span>
+                            </div>
+                            <div style={{ height: '4px', background: '#E5E5E5', borderRadius: '2px', overflow: 'hidden' }}>
+                              <div style={{ width: `${item.score}%`, height: '100%', background: item.score >= 80 ? '#287A4F' : item.score >= 60 ? '#2F5C8F' : '#9CA3AF', borderRadius: '2px' }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {match.analysis && (
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{match.analysis}</p>
+                      )}
+                    </div>
+
+                    {/* Right: Actions */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center' }}>
+                      {match.status === 'pending' ? (
+                        <>
+                          <button
+                            onClick={() => handleShortlist(match.match_id, 'shortlisted')}
+                            disabled={shortlistingId === match.match_id}
+                            style={{
+                              padding: '10px 20px',
+                              borderRadius: '10px',
+                              border: 'none',
+                              background: '#287A4F',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '0.85rem',
+                              fontWeight: 500,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {shortlistingId === match.match_id ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
+                            Shortlist
+                          </button>
+                          <button
+                            onClick={() => handleShortlist(match.match_id, 'rejected')}
+                            disabled={shortlistingId === match.match_id}
+                            style={{
+                              padding: '10px 20px',
+                              borderRadius: '10px',
+                              border: '1px solid #E5E5E5',
+                              background: 'white',
+                              color: 'var(--text-secondary)',
+                              cursor: 'pointer',
+                              fontSize: '0.85rem',
+                              fontWeight: 500,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <X size={14} />
+                            Reject
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleShortlist(match.match_id, 'pending')}
+                          style={{
+                            padding: '10px 20px',
+                            borderRadius: '10px',
+                            border: '1px solid #E5E5E5',
+                            background: 'white',
+                            color: 'var(--text-secondary)',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                          }}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>{match.candidate_email}</p>
-                  {match.analysis && (
-                    <p style={{ margin: '8px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{match.analysis}</p>
-                  )}
                 </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ textAlign: 'center', padding: '8px 16px', background: 'white', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
-                    <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 600, color: match.overall_score >= 80 ? '#287A4F' : match.overall_score >= 60 ? '#2F5C8F' : 'var(--text-primary)' }}>
-                      {Math.round(match.overall_score)}
-                    </p>
-                    <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)' }}>Score</p>
-                  </div>
-
-                  {match.status === 'pending' && (
-                    <>
-                      <button
-                        className="btn-pill"
-                        style={{ padding: '8px', background: '#E4F5E9', borderColor: '#287A4F' }}
-                        onClick={() => handleShortlist(match.match_id, 'shortlisted')}
-                        disabled={shortlistingId === match.match_id}
-                        title="Shortlist"
-                      >
-                        {shortlistingId === match.match_id ? <Loader2 size={16} className="spin" /> : <ThumbsUp size={16} color="#287A4F" />}
-                      </button>
-                      <button
-                        className="btn-pill"
-                        style={{ padding: '8px', background: '#FEE2E2', borderColor: '#DC2626' }}
-                        onClick={() => handleShortlist(match.match_id, 'rejected')}
-                        disabled={shortlistingId === match.match_id}
-                        title="Reject"
-                      >
-                        <ThumbsDown size={16} color="#DC2626" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </Modal>
@@ -675,7 +841,7 @@ function JobsView({ showToast }) {
 }
 
 // --- Candidates View ---
-function CandidatesView({ showToast }) {
+function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   const [candidates, setCandidates] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -698,8 +864,10 @@ function CandidatesView({ showToast }) {
       ]);
       setCandidates(candidatesRes.data);
       setJobs(jobsRes.data);
+      return candidatesRes.data;
     } catch (err) {
       console.error('Failed to fetch candidates:', err);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -708,6 +876,22 @@ function CandidatesView({ showToast }) {
   useEffect(() => {
     fetchCandidates();
   }, [fetchCandidates]);
+
+  // Handle navigation from job matches screen
+  useEffect(() => {
+    if (viewCandidateId && candidates.length > 0) {
+      const candidate = candidates.find(c => c.id === viewCandidateId);
+      if (candidate) {
+        setSelectedCandidate(candidate);
+        setShowDetailModal(true);
+        // Load matches
+        candidatesApi.getMatches(viewCandidateId).then(res => {
+          setCandidateMatches(res.data);
+        }).catch(console.error);
+      }
+      clearViewCandidateId?.();
+    }
+  }, [viewCandidateId, candidates, clearViewCandidateId]);
 
   const handleUpload = async (file) => {
     setUploading(true);
@@ -867,35 +1051,183 @@ function CandidatesView({ showToast }) {
               </div>
               <div style={{ flex: 1 }}>
                 <h3 style={{ margin: '0 0 4px' }}>{selectedCandidate.name}</h3>
-                <p style={{ margin: 0, color: 'var(--text-muted)' }}>{selectedCandidate.email}</p>
-                {selectedCandidate.location && (
-                  <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                    <MapPin size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
-                    {selectedCandidate.location}
-                  </p>
-                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                  {selectedCandidate.email && (
+                    <span><Mail size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />{selectedCandidate.email}</span>
+                  )}
+                  {selectedCandidate.phone && (
+                    <span>{selectedCandidate.phone}</span>
+                  )}
+                  {selectedCandidate.location && (
+                    <span><MapPin size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />{selectedCandidate.location}</span>
+                  )}
+                </div>
               </div>
               <span className="chip chip-blue">{selectedCandidate.source}</span>
             </div>
+
+            {/* Summary */}
+            {(selectedCandidate.parsed_data?.summary || selectedCandidate.parsed_data?.bio) && (
+              <div style={{ background: '#F4F4F4', padding: '16px', borderRadius: '12px' }}>
+                <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: 1.6 }}>
+                  {selectedCandidate.parsed_data.summary || selectedCandidate.parsed_data.bio}
+                </p>
+              </div>
+            )}
+
+            {/* Work Experience */}
+            {selectedCandidate.parsed_data?.experience?.length > 0 && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>Experience</h4>
+                  {selectedCandidate.parsed_data?.total_years_experience && (
+                    <span className="chip chip-navy">{selectedCandidate.parsed_data.total_years_experience} years total</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {selectedCandidate.parsed_data.experience.slice(0, 4).map((exp, i) => (
+                    <div key={i} style={{ background: '#FAFAFA', padding: '14px 16px', borderRadius: '12px', borderLeft: '3px solid var(--brand-navy)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <p style={{ margin: 0, fontWeight: 500 }}>{exp.title || exp.role || exp}</p>
+                          {exp.company && <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{exp.company}</p>}
+                        </div>
+                        {(exp.start_date || exp.end_date || exp.duration) && (
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                            {exp.start_date && exp.end_date
+                              ? `${exp.start_date} - ${exp.end_date}`
+                              : exp.duration || ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Education */}
+            {selectedCandidate.parsed_data?.education?.length > 0 && (
+              <div>
+                <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Education</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {selectedCandidate.parsed_data.education.slice(0, 2).map((edu, i) => (
+                    <div key={i} style={{ background: '#E4F5E9', padding: '14px 16px', borderRadius: '12px' }}>
+                      <p style={{ margin: 0, fontWeight: 500, color: '#287A4F' }}>
+                        {edu.degree || edu}
+                      </p>
+                      {edu.institution && (
+                        <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          {edu.institution}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Certifications */}
+            {selectedCandidate.parsed_data?.certifications?.length > 0 && (
+              <div>
+                <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Certifications</h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {selectedCandidate.parsed_data.certifications.map((cert, i) => (
+                    <span key={i} style={{ background: '#FEF3C7', color: '#92400E', padding: '6px 12px', borderRadius: '8px', fontSize: '0.85rem' }}>
+                      {cert}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI Assessment (for GitHub candidates) */}
+            {selectedCandidate.parsed_data?.ai_assessment && (
+              <div>
+                <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>AI Assessment</h4>
+                <div style={{ background: '#F4F4F4', padding: '16px', borderRadius: '12px' }}>
+                  {selectedCandidate.parsed_data.ai_assessment.summary && (
+                    <p style={{ margin: '0 0 12px', fontSize: '0.9rem', fontStyle: 'italic' }}>
+                      {selectedCandidate.parsed_data.ai_assessment.summary}
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                    {selectedCandidate.parsed_data.ai_assessment.experience_level && (
+                      <span className="chip chip-blue">{selectedCandidate.parsed_data.ai_assessment.experience_level}</span>
+                    )}
+                    {selectedCandidate.parsed_data.ai_assessment.recommendation && (
+                      <span className={`chip ${selectedCandidate.parsed_data.ai_assessment.recommendation === 'highly_recommended' ? 'chip-green' : 'chip-navy'}`}>
+                        {selectedCandidate.parsed_data.ai_assessment.recommendation.replace(/_/g, ' ')}
+                      </span>
+                    )}
+                  </div>
+                  {selectedCandidate.parsed_data.ai_assessment.strengths?.length > 0 && (
+                    <div style={{ marginTop: '12px' }}>
+                      <p style={{ margin: '0 0 6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Strengths:</p>
+                      <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        {selectedCandidate.parsed_data.ai_assessment.strengths.slice(0, 3).map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* GitHub Info */}
+            {selectedCandidate.source === 'github' && selectedCandidate.parsed_data?.github_profile && (
+              <div>
+                <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>GitHub</h4>
+                <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                  <div style={{ background: '#FAFAFA', padding: '12px 16px', borderRadius: '12px', textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontWeight: 600 }}>{selectedCandidate.parsed_data.github_profile.public_repos || 0}</p>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Repos</p>
+                  </div>
+                  <div style={{ background: '#FAFAFA', padding: '12px 16px', borderRadius: '12px', textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontWeight: 600 }}>{selectedCandidate.parsed_data.github_profile.followers || 0}</p>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Followers</p>
+                  </div>
+                  <div style={{ background: '#FAFAFA', padding: '12px 16px', borderRadius: '12px', textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontWeight: 600 }}>{selectedCandidate.parsed_data.github_profile.total_stars || 0}</p>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Stars</p>
+                  </div>
+                  {selectedCandidate.parsed_data.github_profile.profile_url && (
+                    <a
+                      href={selectedCandidate.parsed_data.github_profile.profile_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-pill"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      <GithubIcon size={16} /> View Profile
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Skills */}
             {selectedCandidate.parsed_data?.skills?.length > 0 && (
               <div>
                 <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Skills</h4>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {selectedCandidate.parsed_data.skills.slice(0, 15).map((skill, i) => (
+                  {selectedCandidate.parsed_data.skills.slice(0, 20).map((skill, i) => (
                     <span key={i} className="chip chip-navy" style={{ fontSize: '0.8rem' }}>{skill}</span>
                   ))}
+                  {selectedCandidate.parsed_data.skills.length > 20 && (
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>+{selectedCandidate.parsed_data.skills.length - 20} more</span>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Match to Job */}
-            {jobs.length > 0 && (
+            {/* Match to Job - only open jobs */}
+            {jobs.filter(j => j.status === 'open').length > 0 && (
               <div>
                 <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Match to Job</h4>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {jobs.map(job => (
+                  {jobs.filter(j => j.status === 'open').map(job => (
                     <button
                       key={job.id}
                       className="btn-pill"
@@ -922,20 +1254,22 @@ function CandidatesView({ showToast }) {
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No job matches yet. Click a job above to calculate match.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {candidateMatches.map(match => {
-                  const matchedJob = jobs.find(j => j.id === match.job_id);
-                  return (
-                    <div key={match.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#FAFAFA', borderRadius: '12px' }}>
-                      <span style={{ fontWeight: 500 }}>{matchedJob?.title || `Job #${match.job_id}`}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span className={`chip ${match.overall_score >= 80 ? 'chip-green' : match.overall_score >= 60 ? 'chip-blue' : 'chip-navy'}`}>
-                          {Math.round(match.overall_score)}% match
-                        </span>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{match.status}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                  {candidateMatches
+                    .filter(match => jobs.some(j => j.id === match.job_id)) // Filter out deleted jobs
+                    .map(match => {
+                      const matchedJob = jobs.find(j => j.id === match.job_id);
+                      return (
+                        <div key={match.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#FAFAFA', borderRadius: '12px' }}>
+                          <span style={{ fontWeight: 500 }}>{matchedJob?.title}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span className={`chip ${match.overall_score >= 80 ? 'chip-green' : match.overall_score >= 60 ? 'chip-blue' : 'chip-navy'}`}>
+                              {Math.round(match.overall_score)}% match
+                            </span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{match.status}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </div>
@@ -1192,13 +1526,13 @@ function GitHubView({ showToast }) {
                 }}
               >
                 <option value="">Select a job to match against...</option>
-                {jobs.map(job => (
+                {jobs.filter(j => j.status === 'open').map(job => (
                   <option key={job.id} value={job.id}>{job.title} - {job.department || 'General'}</option>
                 ))}
               </select>
-              {jobs.length === 0 && (
+              {jobs.filter(j => j.status === 'open').length === 0 && (
                 <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  No jobs available. Create a job first to analyze profiles against it.
+                  No open jobs available. Create a job first to analyze profiles against it.
                 </p>
               )}
             </div>

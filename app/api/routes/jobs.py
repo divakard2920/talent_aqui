@@ -84,11 +84,18 @@ async def update_job(
 
 @router.delete("/{job_id}")
 async def delete_job(job_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a job posting."""
+    """Delete a job posting and all associated matches."""
     result = await db.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Delete associated candidate-job matches first
+    await db.execute(
+        CandidateJobMatch.__table__.delete().where(
+            CandidateJobMatch.job_id == job_id
+        )
+    )
 
     await db.delete(job)
     await db.commit()
@@ -169,6 +176,9 @@ async def rescreen_job(
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.status != "open":
+        raise HTTPException(status_code=400, detail=f"Cannot screen for job with status '{job.status}'. Job must be open.")
 
     background_tasks.add_task(screen_candidates_for_job, job_id)
 

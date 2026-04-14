@@ -202,6 +202,28 @@ export function JobForm({ onSubmit, loading, initialData = null, buttonText = 'C
         </div>
       </div>
 
+      {/* Status - only show when editing */}
+      {initialData && (
+        <div>
+          <label style={labelStyle}>Job Status</label>
+          <select
+            name="status"
+            value={form.status || 'open'}
+            onChange={handleChange}
+            style={{
+              ...selectStyle,
+              background: form.status === 'closed' ? '#FEE2E2' : form.status === 'on_hold' ? '#FEF3C7' : '#E4F5E9',
+              color: form.status === 'closed' ? '#DC2626' : form.status === 'on_hold' ? '#92400E' : '#287A4F',
+              fontWeight: 500,
+            }}
+          >
+            <option value="open">Open</option>
+            <option value="on_hold">On Hold</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+      )}
+
       <button type="submit" className="btn-sarvam" disabled={loading} style={{ marginTop: '8px' }}>
         {loading ? <Loader2 size={18} className="spin" /> : null}
         {loading ? 'Saving...' : buttonText}

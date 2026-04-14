@@ -103,6 +103,9 @@ async def match_candidate_to_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    if job.status != "open":
+        raise HTTPException(status_code=400, detail=f"Cannot match to job with status '{job.status}'. Job must be open.")
+
     # Check for existing match
     result = await db.execute(
         select(CandidateJobMatch).where(
@@ -158,6 +161,9 @@ async def screen_candidates_for_job(
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.status != "open":
+        raise HTTPException(status_code=400, detail=f"Cannot screen for job with status '{job.status}'. Job must be open.")
 
     # Get all candidates
     result = await db.execute(select(Candidate))

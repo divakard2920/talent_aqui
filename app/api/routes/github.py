@@ -255,6 +255,9 @@ async def source_candidates_for_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    if job.status != "open":
+        raise HTTPException(status_code=400, detail=f"Cannot source for job with status '{job.status}'. Job must be open.")
+
     # Use AI to extract search criteria from full job context
     prompt = f"""Analyze this job posting and extract GitHub search criteria.
 

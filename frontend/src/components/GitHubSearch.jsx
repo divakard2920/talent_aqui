@@ -15,6 +15,7 @@ const LinkedinIcon = ({ size = 24, ...props }) => (
 );
 
 export function GitHubSearchForm({ onSearch, onSourceForJob, loading, jobs = [] }) {
+  const openJobs = jobs.filter(j => j.status === 'open');
   const [mode, setMode] = useState('manual'); // 'manual' or 'job'
   const [selectedJobId, setSelectedJobId] = useState('');
   const [form, setForm] = useState({
@@ -54,7 +55,7 @@ export function GitHubSearchForm({ onSearch, onSourceForJob, loading, jobs = [] 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Mode Toggle */}
-      {jobs.length > 0 && (
+      {openJobs.length > 0 && (
         <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
           <button
             type="button"
@@ -70,7 +71,7 @@ export function GitHubSearchForm({ onSearch, onSourceForJob, loading, jobs = [] 
               color: mode === 'job' ? 'var(--brand-navy)' : 'var(--text-secondary)',
             }}
           >
-            🎯 Source for Job
+            By Job
           </button>
           <button
             type="button"
@@ -86,7 +87,7 @@ export function GitHubSearchForm({ onSearch, onSourceForJob, loading, jobs = [] 
               color: mode === 'manual' ? 'var(--brand-navy)' : 'var(--text-secondary)',
             }}
           >
-            🔍 Manual Search
+            By Skills
           </button>
         </div>
       )}
@@ -94,19 +95,19 @@ export function GitHubSearchForm({ onSearch, onSourceForJob, loading, jobs = [] 
       {/* Job-based sourcing */}
       {mode === 'job' && jobs.length > 0 && (
         <div style={{ background: '#E8EEF8', padding: '16px', borderRadius: '12px' }}>
-          <label style={{ ...labelStyle, color: 'var(--brand-navy)', fontWeight: 600 }}>Select Job</label>
+          <label style={{ ...labelStyle, color: 'var(--brand-navy)', fontWeight: 600 }}>Job</label>
           <select
             value={selectedJobId}
             onChange={(e) => setSelectedJobId(e.target.value)}
             style={{ ...selectStyle, background: 'white' }}
           >
-            <option value="">-- Choose a job --</option>
-            {jobs.map(job => (
+            <option value="">Select a job</option>
+            {openJobs.map(job => (
               <option key={job.id} value={job.id}>{job.title} - {job.department || 'General'}</option>
             ))}
           </select>
-          <p style={{ margin: '12px 0 0', fontSize: '0.85rem', color: 'var(--brand-navy)' }}>
-            AI analyzes the job description, requirements, and skills to find matching GitHub profiles with partial matching.
+          <p style={{ margin: '12px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            Finds profiles matching job description, requirements, and skills
           </p>
         </div>
       )}
@@ -204,7 +205,7 @@ export function GitHubSearchForm({ onSearch, onSourceForJob, loading, jobs = [] 
         disabled={loading || (mode === 'job' && !selectedJobId)}
       >
         {loading ? <Loader2 size={18} className="spin" /> : <Search size={18} />}
-        {loading ? 'Searching...' : mode === 'job' ? 'Source Candidates for Job' : 'Search GitHub'}
+        {loading ? 'Searching...' : mode === 'job' ? 'Find Candidates' : 'Search'}
       </button>
     </form>
   );
