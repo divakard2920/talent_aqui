@@ -14,7 +14,9 @@ const LinkedinIcon = ({ size = 24, ...props }) => (
   </svg>
 );
 
-export function GitHubSearchForm({ onSearch, loading, jobs = [] }) {
+export function GitHubSearchForm({ onSearch, onSourceForJob, loading, jobs = [] }) {
+  const [mode, setMode] = useState('manual'); // 'manual' or 'job'
+  const [selectedJobId, setSelectedJobId] = useState('');
   const [form, setForm] = useState({
     skills: '',
     location: '',
@@ -22,7 +24,6 @@ export function GitHubSearchForm({ onSearch, loading, jobs = [] }) {
     min_repos: 5,
     min_followers: 10,
     max_results: 20,
-    job_id: '',
   });
 
   const handleChange = (e) => {
@@ -32,118 +33,178 @@ export function GitHubSearchForm({ onSearch, loading, jobs = [] }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const params = {
-      ...form,
-      skills: form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : null,
-      location: form.location || null,
-      language: form.language || null,
-      min_repos: parseInt(form.min_repos) || 5,
-      min_followers: parseInt(form.min_followers) || 10,
-      max_results: parseInt(form.max_results) || 20,
-      job_id: form.job_id ? parseInt(form.job_id) : null,
-    };
-    onSearch(params);
+    if (mode === 'job' && selectedJobId) {
+      // Use AI-powered job-based sourcing
+      onSourceForJob(parseInt(selectedJobId), parseInt(form.max_results) || 20);
+    } else {
+      // Manual search
+      const params = {
+        ...form,
+        skills: form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : null,
+        location: form.location || null,
+        language: form.language || null,
+        min_repos: parseInt(form.min_repos) || 5,
+        min_followers: parseInt(form.min_followers) || 10,
+        max_results: parseInt(form.max_results) || 20,
+      };
+      onSearch(params);
+    }
   };
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Mode Toggle */}
+      {jobs.length > 0 && (
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+          <button
+            type="button"
+            onClick={() => setMode('job')}
+            style={{
+              flex: 1,
+              padding: '12px',
+              borderRadius: '12px',
+              border: mode === 'job' ? '2px solid var(--brand-navy)' : '1px solid var(--border-light)',
+              background: mode === 'job' ? '#E8EEF8' : 'white',
+              cursor: 'pointer',
+              fontWeight: mode === 'job' ? 600 : 400,
+              color: mode === 'job' ? 'var(--brand-navy)' : 'var(--text-secondary)',
+            }}
+          >
+            🎯 Source for Job
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('manual')}
+            style={{
+              flex: 1,
+              padding: '12px',
+              borderRadius: '12px',
+              border: mode === 'manual' ? '2px solid var(--brand-navy)' : '1px solid var(--border-light)',
+              background: mode === 'manual' ? '#E8EEF8' : 'white',
+              cursor: 'pointer',
+              fontWeight: mode === 'manual' ? 600 : 400,
+              color: mode === 'manual' ? 'var(--brand-navy)' : 'var(--text-secondary)',
+            }}
+          >
+            🔍 Manual Search
+          </button>
+        </div>
+      )}
+
+      {/* Job-based sourcing */}
+      {mode === 'job' && jobs.length > 0 && (
+        <div style={{ background: '#E8EEF8', padding: '16px', borderRadius: '12px' }}>
+          <label style={{ ...labelStyle, color: 'var(--brand-navy)', fontWeight: 600 }}>Select Job</label>
+          <select
+            value={selectedJobId}
+            onChange={(e) => setSelectedJobId(e.target.value)}
+            style={{ ...selectStyle, background: 'white' }}
+          >
+            <option value="">-- Choose a job --</option>
+            {jobs.map(job => (
+              <option key={job.id} value={job.id}>{job.title} - {job.department || 'General'}</option>
+            ))}
+          </select>
+          <p style={{ margin: '12px 0 0', fontSize: '0.85rem', color: 'var(--brand-navy)' }}>
+            AI analyzes the job description, requirements, and skills to find matching GitHub profiles with partial matching.
+          </p>
+        </div>
+      )}
+
+      {/* Manual search fields */}
+      {mode === 'manual' && (
+        <>
+          <div>
+            <label style={labelStyle}>Skills (comma separated)</label>
+            <input
+              name="skills"
+              value={form.skills}
+              onChange={handleChange}
+              placeholder="e.g., python, langchain, openai"
+              className="input-elegant"
+              style={{ borderRadius: '12px' }}
+            />
+            <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Finds developers with ANY of these skills (OR matching)
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={labelStyle}>Location</label>
+              <input
+                name="location"
+                value={form.location}
+                onChange={handleChange}
+                placeholder="e.g., chennai, india"
+                className="input-elegant"
+                style={{ borderRadius: '12px' }}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Primary Language</label>
+              <input
+                name="language"
+                value={form.language}
+                onChange={handleChange}
+                placeholder="e.g., Python"
+                className="input-elegant"
+                style={{ borderRadius: '12px' }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={labelStyle}>Min Repos</label>
+              <input
+                name="min_repos"
+                type="number"
+                min="0"
+                value={form.min_repos}
+                onChange={handleChange}
+                className="input-elegant"
+                style={{ borderRadius: '12px' }}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Min Followers</label>
+              <input
+                name="min_followers"
+                type="number"
+                min="0"
+                value={form.min_followers}
+                onChange={handleChange}
+                className="input-elegant"
+                style={{ borderRadius: '12px' }}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Max results - shown in both modes */}
       <div>
-        <label style={labelStyle}>Skills (comma separated)</label>
+        <label style={labelStyle}>Max Results</label>
         <input
-          name="skills"
-          value={form.skills}
+          name="max_results"
+          type="number"
+          min="1"
+          max="100"
+          value={form.max_results}
           onChange={handleChange}
-          placeholder="e.g., python, langchain, openai"
           className="input-elegant"
           style={{ borderRadius: '12px' }}
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-        <div>
-          <label style={labelStyle}>Location</label>
-          <input
-            name="location"
-            value={form.location}
-            onChange={handleChange}
-            placeholder="e.g., chennai, india"
-            className="input-elegant"
-            style={{ borderRadius: '12px' }}
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>Primary Language</label>
-          <input
-            name="language"
-            value={form.language}
-            onChange={handleChange}
-            placeholder="e.g., Python"
-            className="input-elegant"
-            style={{ borderRadius: '12px' }}
-          />
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-        <div>
-          <label style={labelStyle}>Min Repos</label>
-          <input
-            name="min_repos"
-            type="number"
-            min="0"
-            value={form.min_repos}
-            onChange={handleChange}
-            className="input-elegant"
-            style={{ borderRadius: '12px' }}
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>Min Followers</label>
-          <input
-            name="min_followers"
-            type="number"
-            min="0"
-            value={form.min_followers}
-            onChange={handleChange}
-            className="input-elegant"
-            style={{ borderRadius: '12px' }}
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>Max Results</label>
-          <input
-            name="max_results"
-            type="number"
-            min="1"
-            max="100"
-            value={form.max_results}
-            onChange={handleChange}
-            className="input-elegant"
-            style={{ borderRadius: '12px' }}
-          />
-        </div>
-      </div>
-
-      {jobs.length > 0 && (
-        <div>
-          <label style={labelStyle}>Match Against Job (optional)</label>
-          <select
-            name="job_id"
-            value={form.job_id}
-            onChange={handleChange}
-            style={selectStyle}
-          >
-            <option value="">-- No specific job --</option>
-            {jobs.map(job => (
-              <option key={job.id} value={job.id}>{job.title}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      <button type="submit" className="btn-sarvam" disabled={loading}>
+      <button
+        type="submit"
+        className="btn-sarvam"
+        disabled={loading || (mode === 'job' && !selectedJobId)}
+      >
         {loading ? <Loader2 size={18} className="spin" /> : <Search size={18} />}
-        {loading ? 'Searching...' : 'Search GitHub'}
+        {loading ? 'Searching...' : mode === 'job' ? 'Source Candidates for Job' : 'Search GitHub'}
       </button>
     </form>
   );

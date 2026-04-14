@@ -55,42 +55,79 @@ class GitHubSourcingService:
         language: str | None = None,
         max_results: int = 30,
     ) -> list[dict]:
-        """Search for developers matching criteria."""
-        query_parts = ["type:user"]
+        """
+        Search for developers matching criteria.
+
+        Uses OR logic for skills - searches for each skill separately
+        and combines results to find developers with ANY of the skills.
+        """
+        base_query_parts = ["type:user"]
 
         if location:
-            query_parts.append(f"location:{location}")
+            base_query_parts.append(f"location:{location}")
 
         if min_repos:
-            query_parts.append(f"repos:>={min_repos}")
+            base_query_parts.append(f"repos:>={min_repos}")
 
         if min_followers:
-            query_parts.append(f"followers:>={min_followers}")
+            base_query_parts.append(f"followers:>={min_followers}")
 
         if language:
-            query_parts.append(f"language:{language}")
+            base_query_parts.append(f"language:{language}")
 
-        # Add skills as keywords
-        if skills:
-            for skill in skills[:3]:  # Limit to avoid query length issues
-                query_parts.append(skill)
+        base_query = " ".join(base_query_parts)
 
-        query = " ".join(query_parts)
+        all_results = {}  # Use dict to deduplicate by username
 
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.BASE_URL}/search/users",
-                headers=self.headers,
-                params={
-                    "q": query,
-                    "per_page": min(max_results, 100),
-                    "sort": "followers",
-                    "order": "desc",
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data.get("items", [])
+            # If skills provided, search for each skill separately (OR logic)
+            if skills and len(skills) > 0:
+                for skill in skills[:5]:  # Limit to 5 skills to avoid too many API calls
+                    query = f"{base_query} {skill}"
+                    try:
+                        response = await client.get(
+                            f"{self.BASE_URL}/search/users",
+                            headers=self.headers,
+                            params={
+                                "q": query,
+                                "per_page": min(max_results, 30),  # Fewer per skill
+                                "sort": "followers",
+                                "order": "desc",
+                            },
+                        )
+                        response.raise_for_status()
+                        data = response.json()
+
+                        # Add to results, deduplicating by login
+                        for user in data.get("items", []):
+                            username = user.get("login")
+                            if username and username not in all_results:
+                                all_results[username] = user
+                    except Exception as e:
+                        print(f"Error searching for skill '{skill}': {e}")
+                        continue
+            else:
+                # No skills - just use base query
+                response = await client.get(
+                    f"{self.BASE_URL}/search/users",
+                    headers=self.headers,
+                    params={
+                        "q": base_query,
+                        "per_page": min(max_results, 100),
+                        "sort": "followers",
+                        "order": "desc",
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+                for user in data.get("items", []):
+                    username = user.get("login")
+                    if username:
+                        all_results[username] = user
+
+        # Convert back to list and limit results
+        results = list(all_results.values())[:max_results]
+        return results
 
     async def get_user_profile(self, username: str) -> dict:
         """Get detailed user profile."""

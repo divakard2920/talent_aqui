@@ -178,7 +178,7 @@ function App() {
 
 // --- Dashboard View ---
 function DashboardView({ onNavigate }) {
-  const [stats, setStats] = useState({ jobs: 0, candidates: 0 });
+  const [stats, setStats] = useState({ jobs: 0, candidates: 0, avgScore: null });
   const [topCandidates, setTopCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -189,9 +189,28 @@ function DashboardView({ onNavigate }) {
           jobsApi.list(),
           candidatesApi.list({ limit: 5 }),
         ]);
+
+        // Calculate average match score from all jobs
+        let allScores = [];
+        for (const job of jobsRes.data.slice(0, 5)) { // Check first 5 jobs max
+          try {
+            const matchesRes = await jobsApi.getMatches(job.id);
+            if (matchesRes.data?.matches) {
+              allScores.push(...matchesRes.data.matches.map(m => m.overall_score));
+            }
+          } catch {
+            // Skip if no matches
+          }
+        }
+
+        const avgScore = allScores.length > 0
+          ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length)
+          : null;
+
         setStats({
           jobs: jobsRes.data.length,
           candidates: candidatesRes.data.length,
+          avgScore,
         });
         setTopCandidates(candidatesRes.data.slice(0, 3));
       } catch (err) {
@@ -232,7 +251,7 @@ function DashboardView({ onNavigate }) {
         {[
           { label: 'Active Jobs', value: loading ? '-' : stats.jobs, icon: <Briefcase size={20} color="var(--text-secondary)" /> },
           { label: 'Candidates', value: loading ? '-' : stats.candidates, icon: <Users size={20} color="var(--text-secondary)" /> },
-          { label: 'Avg Match Score', value: '85%', icon: <TrendingUp size={20} color="var(--text-secondary)" /> }
+          { label: 'Avg Match Score', value: loading ? '-' : (stats.avgScore !== null ? `${stats.avgScore}%` : 'N/A'), icon: <TrendingUp size={20} color="var(--text-secondary)" /> }
         ].map((stat, i) => (
           <motion.div
             key={i}
@@ -1002,6 +1021,7 @@ function GitHubView({ showToast }) {
   const [rateLimit, setRateLimit] = useState(null);
   const [showAnalyzeModal, setShowAnalyzeModal] = useState(false);
   const [analyzeUsername, setAnalyzeUsername] = useState('');
+  const [analyzeJobId, setAnalyzeJobId] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzedProfile, setAnalyzedProfile] = useState(null);
 
@@ -1025,6 +1045,21 @@ function GitHubView({ showToast }) {
     }
   };
 
+  const handleSourceForJob = async (jobId, maxResults) => {
+    setLoading(true);
+    setSearched(true);
+    try {
+      const res = await githubApi.sourceForJob(jobId, maxResults);
+      setResults(res.data.candidates || []);
+      const job = jobs.find(j => j.id === jobId);
+      showToast(`Found ${res.data.total || 0} developers for "${job?.title || 'Job'}"`);
+    } catch (err) {
+      showToast('Sourcing failed: ' + (err.response?.data?.detail || err.message), 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleImport = async (username) => {
     setImporting(username);
     try {
@@ -1041,7 +1076,7 @@ function GitHubView({ showToast }) {
     if (!analyzeUsername.trim()) return;
     setAnalyzing(true);
     try {
-      const res = await githubApi.analyze(analyzeUsername.trim());
+      const res = await githubApi.analyze(analyzeUsername.trim(), analyzeJobId || null);
       setAnalyzedProfile(res.data);
     } catch (err) {
       showToast('Analysis failed: ' + (err.response?.data?.detail || err.message), 'error');
@@ -1053,6 +1088,7 @@ function GitHubView({ showToast }) {
   const closeAnalyzeModal = () => {
     setShowAnalyzeModal(false);
     setAnalyzeUsername('');
+    setAnalyzeJobId('');
     setAnalyzedProfile(null);
   };
 
@@ -1087,7 +1123,7 @@ function GitHubView({ showToast }) {
 
       <div className="sovereign-card">
         <h3 style={{ marginBottom: '20px', fontSize: '1.2rem' }}>Search Developers</h3>
-        <GitHubSearchForm onSearch={handleSearch} loading={loading} jobs={jobs} />
+        <GitHubSearchForm onSearch={handleSearch} onSourceForJob={handleSourceForJob} loading={loading} jobs={jobs} />
       </div>
 
       {loading && (
@@ -1126,7 +1162,7 @@ function GitHubView({ showToast }) {
         {!analyzedProfile ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
-              Enter a GitHub username to get a detailed AI analysis of their profile.
+              Enter a GitHub username and select a job to analyze the profile against.
             </p>
             <input
               type="text"
@@ -1135,15 +1171,53 @@ function GitHubView({ showToast }) {
               onChange={(e) => setAnalyzeUsername(e.target.value)}
               className="input-elegant"
               style={{ borderRadius: '12px' }}
-              onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
+              onKeyDown={(e) => e.key === 'Enter' && analyzeJobId && handleAnalyze()}
             />
-            <button className="btn-sarvam" onClick={handleAnalyze} disabled={analyzing || !analyzeUsername.trim()}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                Analyze for Job *
+              </label>
+              <select
+                value={analyzeJobId}
+                onChange={(e) => setAnalyzeJobId(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '14px 18px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-strong)',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: '1rem',
+                  background: 'rgba(255, 255, 255, 0.5)',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="">Select a job to match against...</option>
+                {jobs.map(job => (
+                  <option key={job.id} value={job.id}>{job.title} - {job.department || 'General'}</option>
+                ))}
+              </select>
+              {jobs.length === 0 && (
+                <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  No jobs available. Create a job first to analyze profiles against it.
+                </p>
+              )}
+            </div>
+            <button className="btn-sarvam" onClick={handleAnalyze} disabled={analyzing || !analyzeUsername.trim() || !analyzeJobId}>
               {analyzing ? <Loader2 size={18} className="spin" /> : <Search size={18} />}
               {analyzing ? 'Analyzing...' : 'Analyze Profile'}
             </button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Job Context */}
+            {analyzeJobId && (
+              <div style={{ background: '#E8EEF8', padding: '12px 16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Briefcase size={16} color="var(--brand-navy)" />
+                <span style={{ fontSize: '0.9rem', color: 'var(--brand-navy)' }}>
+                  Analyzed for: <strong>{jobs.find(j => j.id === parseInt(analyzeJobId))?.title || 'Job'}</strong>
+                </span>
+              </div>
+            )}
             {/* Profile Header */}
             <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
               <img

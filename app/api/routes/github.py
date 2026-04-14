@@ -233,6 +233,110 @@ async def import_github_candidate(
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 
+@router.post("/source-for-job/{job_id}")
+async def source_candidates_for_job(
+    job_id: int,
+    max_results: int = 20,
+    github_token: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Source GitHub candidates based on a job posting.
+
+    Analyzes the full job context (title, description, requirements)
+    using AI to extract search criteria, then finds partially matching
+    GitHub profiles.
+    """
+    from app.services.azure_openai import azure_openai_service
+
+    # Get job
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Use AI to extract search criteria from full job context
+    prompt = f"""Analyze this job posting and extract GitHub search criteria.
+
+**Job Title:** {job.title}
+**Department:** {job.department or 'N/A'}
+**Description:** {job.description}
+**Requirements:** {job.requirements}
+**Required Skills:** {', '.join(job.skills_required or [])}
+**Preferred Skills:** {', '.join(job.skills_preferred or [])}
+**Experience:** {job.experience_min_years}-{job.experience_max_years or 'N/A'} years
+**Location:** {job.location or 'N/A'}
+
+Extract search criteria for finding matching GitHub developers. Return JSON:
+{{
+    "search_keywords": ["keyword1", "keyword2", ...],  // 5-8 key technologies/skills to search
+    "primary_language": "Python",  // Main programming language or null
+    "location": "location or null",  // Location if remote not acceptable
+    "min_repos": 5,  // Minimum repos based on experience level
+    "min_followers": 10  // Minimum followers based on seniority
+}}
+
+Focus on technologies and skills mentioned in description and requirements, not just the skills list.
+Return ONLY valid JSON."""
+
+    messages = [
+        {"role": "system", "content": "You are an expert technical recruiter. Extract search criteria from job postings."},
+        {"role": "user", "content": prompt},
+    ]
+
+    try:
+        response = azure_openai_service.chat_completion(
+            messages=messages,
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+        criteria = azure_openai_service.parse_json_response(response)
+    except Exception as e:
+        # Fallback to basic criteria
+        criteria = {
+            "search_keywords": job.skills_required or [],
+            "primary_language": None,
+            "location": job.location,
+            "min_repos": 5,
+            "min_followers": 10,
+        }
+
+    # Search GitHub with extracted criteria
+    github_service = get_github_service(github_token)
+
+    job_requirements = {
+        "title": job.title,
+        "description": job.description,
+        "requirements": job.requirements,
+        "skills_required": job.skills_required or [],
+        "skills_preferred": job.skills_preferred or [],
+        "experience_min_years": job.experience_min_years,
+        "experience_max_years": job.experience_max_years,
+    }
+
+    try:
+        candidates = await github_service.source_candidates(
+            skills=criteria.get("search_keywords", []),
+            location=criteria.get("location"),
+            language=criteria.get("primary_language"),
+            min_repos=criteria.get("min_repos", 5),
+            min_followers=criteria.get("min_followers", 10),
+            max_results=max_results,
+            analyze=True,
+            job_requirements=job_requirements,
+        )
+
+        return {
+            "job_id": job_id,
+            "job_title": job.title,
+            "search_criteria": criteria,
+            "total": len(candidates),
+            "candidates": candidates,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GitHub sourcing failed: {str(e)}")
+
+
 @router.get("/rate-limit")
 async def check_rate_limit(github_token: str | None = None):
     """Check GitHub API rate limit status."""

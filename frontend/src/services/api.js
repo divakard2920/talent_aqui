@@ -47,6 +47,8 @@ export const resumeApi = {
 // GitHub API
 export const githubApi = {
   search: (params) => api.post('/github/search', params),
+  sourceForJob: (jobId, maxResults = 20) =>
+    api.post(`/github/source-for-job/${jobId}?max_results=${maxResults}`),
   analyze: (username, jobId = null, githubToken = null) =>
     api.post('/github/analyze', { username, job_id: jobId, github_token: githubToken }),
   import: (username, githubToken = null) =>
