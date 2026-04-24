@@ -25,6 +25,8 @@ import {
   AlertCircle,
   X,
   Check,
+  ChevronDown,
+  Phone,
 } from 'lucide-react';
 import './index.css';
 import knorrLogo from './assets/knorr.png';
@@ -148,7 +150,7 @@ function App() {
           </div>
 
           <nav style={{ display: 'flex', gap: '8px' }}>
-            {['dashboard', 'jobs', 'candidates', 'github'].map((tab) => (
+            {['dashboard', 'jobs', 'candidates', 'interviews', 'github'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -180,6 +182,7 @@ function App() {
           {activeTab === 'dashboard' && <DashboardView key="dashboard" onNavigate={setActiveTab} />}
           {activeTab === 'jobs' && <JobsView key="jobs" showToast={showToast} onViewCandidate={handleViewCandidate} />}
           {activeTab === 'candidates' && <CandidatesView key="candidates" showToast={showToast} viewCandidateId={viewCandidateId} clearViewCandidateId={() => setViewCandidateId(null)} />}
+          {activeTab === 'interviews' && <InterviewsView key="interviews" showToast={showToast} />}
           {activeTab === 'github' && <GitHubView key="github" showToast={showToast} />}
         </AnimatePresence>
       </main>
@@ -946,8 +949,6 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   const [currentInterview, setCurrentInterview] = useState(null);
   const [interviewJob, setInterviewJob] = useState(null);
   const [creatingInterview, setCreatingInterview] = useState(false);
-  const [candidateInterviews, setCandidateInterviews] = useState([]);
-  const [loadingInterviews, setLoadingInterviews] = useState(false);
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
@@ -978,13 +979,9 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
       if (candidate) {
         setSelectedCandidate(candidate);
         setShowDetailModal(true);
-        // Load matches and interviews
-        Promise.all([
-          candidatesApi.getMatches(viewCandidateId),
-          interviewApi.list({ candidate_id: viewCandidateId }),
-        ]).then(([matchesRes, interviewsRes]) => {
-          setCandidateMatches(matchesRes.data);
-          setCandidateInterviews(interviewsRes.data);
+        // Load matches
+        candidatesApi.getMatches(viewCandidateId).then(res => {
+          setCandidateMatches(res.data);
         }).catch(console.error);
       }
       clearViewCandidateId?.();
@@ -1010,22 +1007,14 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setShowDetailModal(true);
     setShowAllSkills(false);
     setLoadingMatches(true);
-    setLoadingInterviews(true);
-    setCandidateInterviews([]);
     try {
-      const [matchesRes, interviewsRes] = await Promise.all([
-        candidatesApi.getMatches(candidate.id),
-        interviewApi.list({ candidate_id: candidate.id }),
-      ]);
-      setCandidateMatches(matchesRes.data);
-      setCandidateInterviews(interviewsRes.data);
+      const res = await candidatesApi.getMatches(candidate.id);
+      setCandidateMatches(res.data);
     } catch (err) {
-      console.error('Failed to fetch candidate data:', err);
+      console.error('Failed to fetch candidate matches:', err);
       setCandidateMatches([]);
-      setCandidateInterviews([]);
     } finally {
       setLoadingMatches(false);
-      setLoadingInterviews(false);
     }
   };
 
@@ -1067,7 +1056,6 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setShowDetailModal(false);
     setSelectedCandidate(null);
     setCandidateMatches([]);
-    setCandidateInterviews([]);
     setShowAllSkills(false);
   };
 
@@ -1093,21 +1081,12 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     }
   };
 
-  const handleInterviewComplete = async (result) => {
+  const handleInterviewComplete = (result) => {
     const isIncomplete = result.evaluation?.incomplete || result.evaluation?.overall_score === 0;
     if (isIncomplete) {
       showToast('Screening incomplete - candidate did not engage', 'error');
     } else {
       showToast(`Screening complete! Score: ${result.evaluation?.overall_score || 'N/A'}`, 'success');
-    }
-    // Refresh interviews list for the candidate
-    if (interviewCandidate) {
-      try {
-        const res = await interviewApi.list({ candidate_id: interviewCandidate.id });
-        setCandidateInterviews(res.data);
-      } catch (err) {
-        console.error('Failed to refresh interviews:', err);
-      }
     }
   };
 
@@ -1511,127 +1490,6 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
               </div>
             )}
 
-            {/* Interview History */}
-            <div>
-              <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Screening History</h4>
-              {loadingInterviews ? (
-                <div className="flex-center" style={{ padding: '24px' }}>
-                  <Loader2 size={24} className="spin" />
-                </div>
-              ) : candidateInterviews.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No screening calls yet.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {candidateInterviews.map(interview => {
-                    const interviewJob = jobs.find(j => j.id === interview.job_id);
-                    const evaluation = interview.evaluation;
-                    const isIncomplete = evaluation?.incomplete || evaluation?.overall_score === 0;
-
-                    return (
-                      <div key={interview.id} style={{
-                        padding: '16px',
-                        background: interview.status === 'completed'
-                          ? (isIncomplete ? '#FEF2F2' : evaluation?.recommendation === 'proceed_to_l2' ? '#F0FDF4' : evaluation?.recommendation === 'hold' ? '#FFFBEB' : '#FEF2F2')
-                          : '#F4F4F4',
-                        borderRadius: '12px',
-                        border: '1px solid var(--border-light)',
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                          <div>
-                            <span style={{ fontWeight: 600 }}>{interviewJob?.title || 'Unknown Job'}</span>
-                            <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                              {interview.completed_at
-                                ? new Date(interview.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                                : interview.started_at
-                                  ? `Started ${new Date(interview.started_at).toLocaleDateString()}`
-                                  : `Scheduled ${new Date(interview.scheduled_at).toLocaleDateString()}`
-                              }
-                              {interview.duration_minutes && ` • ${interview.duration_minutes} min`}
-                            </p>
-                          </div>
-                          <span className={`chip ${
-                            interview.status === 'completed'
-                              ? (isIncomplete ? 'chip-navy' : evaluation?.recommendation === 'proceed_to_l2' ? 'chip-green' : evaluation?.recommendation === 'hold' ? 'chip-blue' : 'chip-navy')
-                              : interview.status === 'in_progress' ? 'chip-blue' : 'chip-navy'
-                          }`}>
-                            {interview.status === 'completed'
-                              ? (isIncomplete ? 'Incomplete' : evaluation?.recommendation === 'proceed_to_l2' ? 'Proceed to L2' : evaluation?.recommendation === 'hold' ? 'Hold' : 'Not Recommended')
-                              : interview.status === 'in_progress' ? 'In Progress'
-                              : interview.status === 'cancelled' ? 'Cancelled'
-                              : 'Scheduled'
-                            }
-                          </span>
-                        </div>
-
-                        {interview.status === 'completed' && evaluation && !isIncomplete && (
-                          <>
-                            {/* Score */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
-                              <div style={{
-                                width: '48px',
-                                height: '48px',
-                                borderRadius: '50%',
-                                background: evaluation.overall_score >= 70 ? '#DCFCE7' : evaluation.overall_score >= 50 ? '#FEF3C7' : '#FEE2E2',
-                                color: evaluation.overall_score >= 70 ? '#166534' : evaluation.overall_score >= 50 ? '#92400E' : '#DC2626',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 700,
-                                fontSize: '1.1rem',
-                              }}>
-                                {evaluation.overall_score}
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', fontSize: '0.75rem' }}>
-                                  <div><span style={{ color: 'var(--text-muted)' }}>Comm:</span> <strong>{evaluation.communication_score}</strong></div>
-                                  <div><span style={{ color: 'var(--text-muted)' }}>Tech:</span> <strong>{evaluation.technical_score}</strong></div>
-                                  <div><span style={{ color: 'var(--text-muted)' }}>Fit:</span> <strong>{evaluation.culture_fit_score}</strong></div>
-                                  <div><span style={{ color: 'var(--text-muted)' }}>Enthusiasm:</span> <strong>{evaluation.enthusiasm_score}</strong></div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Summary */}
-                            {evaluation.summary && (
-                              <p style={{ margin: '0 0 12px', fontSize: '0.85rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>
-                                "{evaluation.summary}"
-                              </p>
-                            )}
-
-                            {/* Strengths & Concerns */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.8rem' }}>
-                              {evaluation.strengths?.length > 0 && (
-                                <div>
-                                  <span style={{ color: '#166534', fontWeight: 600 }}>Strengths:</span>
-                                  <ul style={{ margin: '4px 0 0', paddingLeft: '16px' }}>
-                                    {evaluation.strengths.slice(0, 2).map((s, i) => <li key={i}>{s}</li>)}
-                                  </ul>
-                                </div>
-                              )}
-                              {evaluation.concerns?.length > 0 && (
-                                <div>
-                                  <span style={{ color: '#DC2626', fontWeight: 600 }}>Concerns:</span>
-                                  <ul style={{ margin: '4px 0 0', paddingLeft: '16px' }}>
-                                    {evaluation.concerns.slice(0, 2).map((c, i) => <li key={i}>{c}</li>)}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
-                          </>
-                        )}
-
-                        {interview.status === 'completed' && isIncomplete && (
-                          <p style={{ margin: 0, fontSize: '0.85rem', color: '#991B1B' }}>
-                            {evaluation?.summary || 'Candidate did not engage in the screening call.'}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
             {/* Job Matches */}
             <div>
               <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Job Matches</h4>
@@ -1760,6 +1618,323 @@ function CandidateCard({ candidate, onView, onDelete }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// --- Interviews View ---
+function InterviewsView({ showToast }) {
+  const [jobs, setJobs] = useState([]);
+  const [interviews, setInterviews] = useState([]);
+  const [candidates, setCandidates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [expandedInterview, setExpandedInterview] = useState(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [jobsRes, interviewsRes, candidatesRes] = await Promise.all([
+          jobsApi.list(),
+          interviewApi.list(),
+          candidatesApi.list(),
+        ]);
+        setJobs(jobsRes.data);
+        setInterviews(interviewsRes.data);
+        setCandidates(candidatesRes.data);
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const formatName = (name) => {
+    if (!name) return '';
+    return name.split(' ').map(word =>
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(' ');
+  };
+
+  // Group interviews by job
+  const interviewsByJob = jobs.map(job => ({
+    job,
+    interviews: interviews.filter(i => i.job_id === job.id),
+  })).filter(g => g.interviews.length > 0);
+
+  // Filter by selected job
+  const displayGroups = selectedJob
+    ? interviewsByJob.filter(g => g.job.id === selectedJob)
+    : interviewsByJob;
+
+  // Stats
+  const totalInterviews = interviews.length;
+  const completedInterviews = interviews.filter(i => i.status === 'completed').length;
+  const proceedToL2 = interviews.filter(i => i.evaluation?.recommendation === 'proceed_to_l2').length;
+  const onHold = interviews.filter(i => i.evaluation?.recommendation === 'hold').length;
+
+  if (loading) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-center" style={{ padding: '80px' }}>
+        <Loader2 size={32} className="spin" />
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
+      {/* Header */}
+      <div style={{ marginBottom: '32px' }}>
+        <h1 style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Screening Interviews</h1>
+        <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>
+          L1 screening calls conducted by Arun
+        </p>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '32px' }}>
+        {[
+          { label: 'Total Screenings', value: totalInterviews, color: 'var(--brand-navy)' },
+          { label: 'Completed', value: completedInterviews, color: 'var(--accent-blue)' },
+          { label: 'Proceed to L2', value: proceedToL2, color: '#287A4F' },
+          { label: 'On Hold', value: onHold, color: '#F59E0B' },
+        ].map((stat, i) => (
+          <div key={i} className="sovereign-card" style={{ padding: '20px', textAlign: 'center' }}>
+            <p style={{ fontSize: '2rem', fontWeight: 700, color: stat.color, margin: '0 0 4px' }}>{stat.value}</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>{stat.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Job Filter */}
+      <div style={{ marginBottom: '24px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <button
+          className={selectedJob === null ? 'btn-sarvam' : 'btn-pill'}
+          onClick={() => setSelectedJob(null)}
+          style={{ fontSize: '0.85rem', padding: '8px 16px' }}
+        >
+          All Jobs
+        </button>
+        {jobs.filter(j => interviews.some(i => i.job_id === j.id)).map(job => (
+          <button
+            key={job.id}
+            className={selectedJob === job.id ? 'btn-sarvam' : 'btn-pill'}
+            onClick={() => setSelectedJob(job.id)}
+            style={{ fontSize: '0.85rem', padding: '8px 16px' }}
+          >
+            {job.title} ({interviews.filter(i => i.job_id === job.id).length})
+          </button>
+        ))}
+      </div>
+
+      {/* Interview Results by Job */}
+      {displayGroups.length === 0 ? (
+        <div className="sovereign-card" style={{ textAlign: 'center', padding: '60px' }}>
+          <Phone size={48} style={{ color: 'var(--text-muted)', marginBottom: '16px' }} />
+          <h3 style={{ margin: '0 0 8px' }}>No Screening Calls Yet</h3>
+          <p style={{ color: 'var(--text-muted)' }}>Schedule L1 screenings from candidate profiles to see results here.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {displayGroups.map(({ job, interviews: jobInterviews }) => (
+            <div key={job.id} className="sovereign-card" style={{ padding: '24px' }}>
+              {/* Job Header */}
+              <div style={{ marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid var(--border-light)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 4px', fontSize: '1.2rem' }}>{job.title}</h3>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      {job.department} • {job.location}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <span className="chip chip-green">
+                      {jobInterviews.filter(i => i.evaluation?.recommendation === 'proceed_to_l2').length} Proceed
+                    </span>
+                    <span className="chip chip-blue">
+                      {jobInterviews.filter(i => i.evaluation?.recommendation === 'hold').length} Hold
+                    </span>
+                    <span className="chip chip-navy">
+                      {jobInterviews.filter(i => i.evaluation?.recommendation === 'reject' || i.evaluation?.incomplete).length} Reject
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Candidates Table */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {jobInterviews.map(interview => {
+                  const candidate = candidates.find(c => c.id === interview.candidate_id);
+                  const evaluation = interview.evaluation;
+                  const isIncomplete = evaluation?.incomplete || evaluation?.overall_score === 0;
+                  const isExpanded = expandedInterview === interview.id;
+
+                  return (
+                    <div
+                      key={interview.id}
+                      style={{
+                        background: interview.status === 'completed'
+                          ? (isIncomplete ? '#FEF2F2' : evaluation?.recommendation === 'proceed_to_l2' ? '#F0FDF4' : evaluation?.recommendation === 'hold' ? '#FFFBEB' : '#FEF2F2')
+                          : '#F9FAFB',
+                        borderRadius: '12px',
+                        border: '1px solid var(--border-light)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {/* Main Row */}
+                      <div
+                        style={{
+                          padding: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '16px',
+                          cursor: interview.status === 'completed' && !isIncomplete ? 'pointer' : 'default',
+                        }}
+                        onClick={() => interview.status === 'completed' && !isIncomplete && setExpandedInterview(isExpanded ? null : interview.id)}
+                      >
+                        {/* Avatar */}
+                        <div style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '50%',
+                          background: 'var(--brand-navy)',
+                          color: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 600,
+                          flexShrink: 0,
+                        }}>
+                          {formatName(candidate?.name)?.charAt(0) || '?'}
+                        </div>
+
+                        {/* Candidate Info */}
+                        <div style={{ flex: 1 }}>
+                          <p style={{ margin: '0 0 2px', fontWeight: 600 }}>{formatName(candidate?.name) || 'Unknown'}</p>
+                          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            {interview.completed_at
+                              ? new Date(interview.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                              : interview.status === 'in_progress' ? 'In Progress' : 'Scheduled'
+                            }
+                            {interview.duration_minutes && ` • ${interview.duration_minutes} min`}
+                          </p>
+                        </div>
+
+                        {/* Score */}
+                        {interview.status === 'completed' && !isIncomplete && (
+                          <div style={{
+                            width: '48px',
+                            height: '48px',
+                            borderRadius: '50%',
+                            background: evaluation.overall_score >= 70 ? '#DCFCE7' : evaluation.overall_score >= 50 ? '#FEF3C7' : '#FEE2E2',
+                            color: evaluation.overall_score >= 70 ? '#166534' : evaluation.overall_score >= 50 ? '#92400E' : '#DC2626',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                          }}>
+                            {evaluation.overall_score}
+                          </div>
+                        )}
+
+                        {/* Status Badge */}
+                        <span className={`chip ${
+                          interview.status === 'completed'
+                            ? (isIncomplete ? 'chip-navy' : evaluation?.recommendation === 'proceed_to_l2' ? 'chip-green' : evaluation?.recommendation === 'hold' ? 'chip-blue' : 'chip-navy')
+                            : 'chip-navy'
+                        }`} style={{ minWidth: '100px', textAlign: 'center' }}>
+                          {interview.status === 'completed'
+                            ? (isIncomplete ? 'Incomplete' : evaluation?.recommendation === 'proceed_to_l2' ? 'Proceed to L2' : evaluation?.recommendation === 'hold' ? 'Hold' : 'Not Recommended')
+                            : interview.status === 'in_progress' ? 'In Progress'
+                            : interview.status === 'cancelled' ? 'Cancelled'
+                            : 'Scheduled'
+                          }
+                        </span>
+
+                        {/* Expand Icon */}
+                        {interview.status === 'completed' && !isIncomplete && (
+                          <ChevronDown size={20} style={{
+                            color: 'var(--text-muted)',
+                            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.2s ease',
+                          }} />
+                        )}
+                      </div>
+
+                      {/* Expanded Details */}
+                      {isExpanded && evaluation && (
+                        <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border-light)' }}>
+                          <div style={{ paddingTop: '16px' }}>
+                            {/* Score Breakdown */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                              {[
+                                { label: 'Communication', score: evaluation.communication_score },
+                                { label: 'Technical', score: evaluation.technical_score },
+                                { label: 'Culture Fit', score: evaluation.culture_fit_score },
+                                { label: 'Enthusiasm', score: evaluation.enthusiasm_score },
+                              ].map(item => (
+                                <div key={item.label} style={{ textAlign: 'center' }}>
+                                  <p style={{ margin: '0 0 4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.label}</p>
+                                  <p style={{
+                                    margin: 0,
+                                    fontSize: '1.1rem',
+                                    fontWeight: 700,
+                                    color: item.score >= 70 ? '#166534' : item.score >= 50 ? '#92400E' : '#DC2626',
+                                  }}>{item.score}</p>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Summary */}
+                            {evaluation.summary && (
+                              <p style={{ margin: '0 0 16px', fontSize: '0.9rem', fontStyle: 'italic', color: 'var(--text-secondary)', background: 'white', padding: '12px', borderRadius: '8px' }}>
+                                "{evaluation.summary}"
+                              </p>
+                            )}
+
+                            {/* Strengths & Concerns */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                              {evaluation.strengths?.length > 0 && (
+                                <div>
+                                  <h5 style={{ margin: '0 0 8px', fontSize: '0.85rem', color: '#166534' }}>Strengths</h5>
+                                  <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem' }}>
+                                    {evaluation.strengths.slice(0, 3).map((s, i) => <li key={i}>{s}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                              {evaluation.concerns?.length > 0 && (
+                                <div>
+                                  <h5 style={{ margin: '0 0 8px', fontSize: '0.85rem', color: '#DC2626' }}>Concerns</h5>
+                                  <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem' }}>
+                                    {evaluation.concerns.slice(0, 3).map((c, i) => <li key={i}>{c}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Suggested L2 Questions */}
+                            {evaluation.suggested_l2_questions?.length > 0 && (
+                              <div style={{ marginTop: '16px' }}>
+                                <h5 style={{ margin: '0 0 8px', fontSize: '0.85rem', color: 'var(--brand-navy)' }}>Suggested L2 Questions</h5>
+                                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                  {evaluation.suggested_l2_questions.slice(0, 3).map((q, i) => <li key={i}>{q}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </motion.div>
   );
 }
 
