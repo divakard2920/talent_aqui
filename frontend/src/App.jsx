@@ -946,6 +946,8 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   const [currentInterview, setCurrentInterview] = useState(null);
   const [interviewJob, setInterviewJob] = useState(null);
   const [creatingInterview, setCreatingInterview] = useState(false);
+  const [candidateInterviews, setCandidateInterviews] = useState([]);
+  const [loadingInterviews, setLoadingInterviews] = useState(false);
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
@@ -976,9 +978,13 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
       if (candidate) {
         setSelectedCandidate(candidate);
         setShowDetailModal(true);
-        // Load matches
-        candidatesApi.getMatches(viewCandidateId).then(res => {
-          setCandidateMatches(res.data);
+        // Load matches and interviews
+        Promise.all([
+          candidatesApi.getMatches(viewCandidateId),
+          interviewApi.list({ candidate_id: viewCandidateId }),
+        ]).then(([matchesRes, interviewsRes]) => {
+          setCandidateMatches(matchesRes.data);
+          setCandidateInterviews(interviewsRes.data);
         }).catch(console.error);
       }
       clearViewCandidateId?.();
@@ -1004,14 +1010,22 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setShowDetailModal(true);
     setShowAllSkills(false);
     setLoadingMatches(true);
+    setLoadingInterviews(true);
+    setCandidateInterviews([]);
     try {
-      const res = await candidatesApi.getMatches(candidate.id);
-      setCandidateMatches(res.data);
+      const [matchesRes, interviewsRes] = await Promise.all([
+        candidatesApi.getMatches(candidate.id),
+        interviewApi.list({ candidate_id: candidate.id }),
+      ]);
+      setCandidateMatches(matchesRes.data);
+      setCandidateInterviews(interviewsRes.data);
     } catch (err) {
-      console.error('Failed to fetch candidate matches:', err);
+      console.error('Failed to fetch candidate data:', err);
       setCandidateMatches([]);
+      setCandidateInterviews([]);
     } finally {
       setLoadingMatches(false);
+      setLoadingInterviews(false);
     }
   };
 
@@ -1053,6 +1067,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setShowDetailModal(false);
     setSelectedCandidate(null);
     setCandidateMatches([]);
+    setCandidateInterviews([]);
     setShowAllSkills(false);
   };
 
@@ -1078,8 +1093,22 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     }
   };
 
-  const handleInterviewComplete = (result) => {
-    showToast(`Screening complete! Score: ${result.evaluation?.overall_score || 'N/A'}`, 'success');
+  const handleInterviewComplete = async (result) => {
+    const isIncomplete = result.evaluation?.incomplete || result.evaluation?.overall_score === 0;
+    if (isIncomplete) {
+      showToast('Screening incomplete - candidate did not engage', 'error');
+    } else {
+      showToast(`Screening complete! Score: ${result.evaluation?.overall_score || 'N/A'}`, 'success');
+    }
+    // Refresh interviews list for the candidate
+    if (interviewCandidate) {
+      try {
+        const res = await interviewApi.list({ candidate_id: interviewCandidate.id });
+        setCandidateInterviews(res.data);
+      } catch (err) {
+        console.error('Failed to refresh interviews:', err);
+      }
+    }
   };
 
   const closeInterviewModal = () => {
@@ -1481,6 +1510,127 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
                 </div>
               </div>
             )}
+
+            {/* Interview History */}
+            <div>
+              <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Screening History</h4>
+              {loadingInterviews ? (
+                <div className="flex-center" style={{ padding: '24px' }}>
+                  <Loader2 size={24} className="spin" />
+                </div>
+              ) : candidateInterviews.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No screening calls yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {candidateInterviews.map(interview => {
+                    const interviewJob = jobs.find(j => j.id === interview.job_id);
+                    const evaluation = interview.evaluation;
+                    const isIncomplete = evaluation?.incomplete || evaluation?.overall_score === 0;
+
+                    return (
+                      <div key={interview.id} style={{
+                        padding: '16px',
+                        background: interview.status === 'completed'
+                          ? (isIncomplete ? '#FEF2F2' : evaluation?.recommendation === 'proceed_to_l2' ? '#F0FDF4' : evaluation?.recommendation === 'hold' ? '#FFFBEB' : '#FEF2F2')
+                          : '#F4F4F4',
+                        borderRadius: '12px',
+                        border: '1px solid var(--border-light)',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                          <div>
+                            <span style={{ fontWeight: 600 }}>{interviewJob?.title || 'Unknown Job'}</span>
+                            <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                              {interview.completed_at
+                                ? new Date(interview.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                : interview.started_at
+                                  ? `Started ${new Date(interview.started_at).toLocaleDateString()}`
+                                  : `Scheduled ${new Date(interview.scheduled_at).toLocaleDateString()}`
+                              }
+                              {interview.duration_minutes && ` • ${interview.duration_minutes} min`}
+                            </p>
+                          </div>
+                          <span className={`chip ${
+                            interview.status === 'completed'
+                              ? (isIncomplete ? 'chip-navy' : evaluation?.recommendation === 'proceed_to_l2' ? 'chip-green' : evaluation?.recommendation === 'hold' ? 'chip-blue' : 'chip-navy')
+                              : interview.status === 'in_progress' ? 'chip-blue' : 'chip-navy'
+                          }`}>
+                            {interview.status === 'completed'
+                              ? (isIncomplete ? 'Incomplete' : evaluation?.recommendation === 'proceed_to_l2' ? 'Proceed to L2' : evaluation?.recommendation === 'hold' ? 'Hold' : 'Not Recommended')
+                              : interview.status === 'in_progress' ? 'In Progress'
+                              : interview.status === 'cancelled' ? 'Cancelled'
+                              : 'Scheduled'
+                            }
+                          </span>
+                        </div>
+
+                        {interview.status === 'completed' && evaluation && !isIncomplete && (
+                          <>
+                            {/* Score */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
+                              <div style={{
+                                width: '48px',
+                                height: '48px',
+                                borderRadius: '50%',
+                                background: evaluation.overall_score >= 70 ? '#DCFCE7' : evaluation.overall_score >= 50 ? '#FEF3C7' : '#FEE2E2',
+                                color: evaluation.overall_score >= 70 ? '#166534' : evaluation.overall_score >= 50 ? '#92400E' : '#DC2626',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 700,
+                                fontSize: '1.1rem',
+                              }}>
+                                {evaluation.overall_score}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', fontSize: '0.75rem' }}>
+                                  <div><span style={{ color: 'var(--text-muted)' }}>Comm:</span> <strong>{evaluation.communication_score}</strong></div>
+                                  <div><span style={{ color: 'var(--text-muted)' }}>Tech:</span> <strong>{evaluation.technical_score}</strong></div>
+                                  <div><span style={{ color: 'var(--text-muted)' }}>Fit:</span> <strong>{evaluation.culture_fit_score}</strong></div>
+                                  <div><span style={{ color: 'var(--text-muted)' }}>Enthusiasm:</span> <strong>{evaluation.enthusiasm_score}</strong></div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Summary */}
+                            {evaluation.summary && (
+                              <p style={{ margin: '0 0 12px', fontSize: '0.85rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>
+                                "{evaluation.summary}"
+                              </p>
+                            )}
+
+                            {/* Strengths & Concerns */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.8rem' }}>
+                              {evaluation.strengths?.length > 0 && (
+                                <div>
+                                  <span style={{ color: '#166534', fontWeight: 600 }}>Strengths:</span>
+                                  <ul style={{ margin: '4px 0 0', paddingLeft: '16px' }}>
+                                    {evaluation.strengths.slice(0, 2).map((s, i) => <li key={i}>{s}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                              {evaluation.concerns?.length > 0 && (
+                                <div>
+                                  <span style={{ color: '#DC2626', fontWeight: 600 }}>Concerns:</span>
+                                  <ul style={{ margin: '4px 0 0', paddingLeft: '16px' }}>
+                                    {evaluation.concerns.slice(0, 2).map((c, i) => <li key={i}>{c}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+
+                        {interview.status === 'completed' && isIncomplete && (
+                          <p style={{ margin: 0, fontSize: '0.85rem', color: '#991B1B' }}>
+                            {evaluation?.summary || 'Candidate did not engage in the screening call.'}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* Job Matches */}
             <div>

@@ -20,7 +20,10 @@ class Settings(BaseSettings):
     github_access_token: str | None = None
 
     # Azure OpenAI Voice Models (for AI Voice Interview)
-    azure_openai_tts_deployment: str | None = None  # e.g., "tts" or "tts-hd"
+    # Uses separate endpoint if TTS/Whisper are in different region than main GPT-4
+    azure_openai_voice_endpoint: str | None = None  # Endpoint for TTS & Whisper
+    azure_openai_voice_key: str | None = None  # Key for TTS & Whisper
+    azure_openai_tts_deployment: str | None = None  # e.g., "gpt-4o-mini-tts"
     azure_openai_whisper_deployment: str | None = None  # e.g., "whisper"
 
     class Config:

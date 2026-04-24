@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Phone, PhoneOff, Loader2, Volume2, User } from 'lucide-react';
+import { Mic, MicOff, Phone, PhoneOff, Loader2, Volume2, User, Send, MessageSquare } from 'lucide-react';
 import { interviewApi } from '../services/api';
 
 const INTERVIEWER_NAME = "Arun";
@@ -11,11 +11,15 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
   const [transcript, setTranscript] = useState([]);
   const [error, setError] = useState(null);
   const [evaluation, setEvaluation] = useState(null);
+  const [useTextMode, setUseTextMode] = useState(false); // Fallback for no mic access
+  const [textInput, setTextInput] = useState('');
+  const [micError, setMicError] = useState(false);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioContextRef = useRef(null);
   const streamRef = useRef(null);
+  const textInputRef = useRef(null);
 
   // Start the interview
   const startInterview = async () => {
@@ -85,7 +89,51 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
       mediaRecorder.start();
       setIsRecording(true);
     } catch (err) {
-      setError('Could not access microphone. Please allow microphone access.');
+      setMicError(true);
+      setUseTextMode(true);
+      setError('Microphone not available. Switched to text mode.');
+    }
+  };
+
+  // Send text response (fallback for no mic)
+  const sendTextResponse = async () => {
+    if (!textInput.trim() || status !== 'active') return;
+
+    const text = textInput.trim();
+    setTextInput('');
+    setStatus('processing');
+
+    try {
+      const res = await interviewApi.respondText(interview.id, text);
+
+      // Add candidate's response to transcript
+      setTranscript(prev => [...prev, {
+        role: 'candidate',
+        content: text,
+        timestamp: new Date().toISOString(),
+      }]);
+
+      // Add Arun's response
+      setTranscript(prev => [...prev, {
+        role: 'ai',
+        content: res.data.ai_message,
+        timestamp: new Date().toISOString(),
+      }]);
+
+      // Check if interview is complete
+      if (res.data.is_complete) {
+        setStatus('completed');
+        const evalRes = await interviewApi.get(interview.id);
+        setEvaluation(evalRes.data.evaluation);
+        onComplete?.(evalRes.data);
+      } else {
+        setStatus('active');
+        // Focus back on input
+        setTimeout(() => textInputRef.current?.focus(), 100);
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to send response');
+      setStatus('active');
     }
   };
 
@@ -466,55 +514,118 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
         padding: '20px',
         background: 'white',
         borderTop: '1px solid var(--border-light)',
-        display: 'flex',
-        justifyContent: 'center',
-        gap: '16px',
       }}>
-        {status === 'ready' && (
-          <button className="btn-sarvam" onClick={startInterview}>
-            <Phone size={18} /> Start Call
-          </button>
-        )}
-
+        {/* Mode toggle */}
         {status === 'active' && !isSpeaking && (
-          <>
-            {!isRecording ? (
-              <button
-                className="btn-sarvam"
-                onClick={startRecording}
-                style={{ background: '#287A4F' }}
-              >
-                <Mic size={18} /> Hold to Speak
-              </button>
-            ) : (
-              <button
-                className="btn-sarvam"
-                onClick={stopRecording}
-                style={{ background: '#DC2626' }}
-              >
-                <MicOff size={18} /> Release to Send
-              </button>
-            )}
-
-            <button className="btn-pill" onClick={endInterview}>
-              <PhoneOff size={18} /> End Call
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+            <button
+              onClick={() => setUseTextMode(false)}
+              style={{
+                padding: '6px 16px',
+                borderRadius: '20px 0 0 20px',
+                border: '1px solid var(--border-strong)',
+                background: !useTextMode ? 'var(--brand-navy)' : 'white',
+                color: !useTextMode ? 'white' : 'var(--text-primary)',
+                fontSize: '0.8rem',
+                cursor: micError ? 'not-allowed' : 'pointer',
+                opacity: micError ? 0.5 : 1,
+              }}
+              disabled={micError}
+            >
+              <Mic size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Voice
             </button>
-          </>
-        )}
-
-        {status === 'active' && isSpeaking && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-muted)' }}>
-            <Volume2 size={24} className="pulse" />
-            <span>{INTERVIEWER_NAME} is speaking...</span>
+            <button
+              onClick={() => setUseTextMode(true)}
+              style={{
+                padding: '6px 16px',
+                borderRadius: '0 20px 20px 0',
+                border: '1px solid var(--border-strong)',
+                borderLeft: 'none',
+                background: useTextMode ? 'var(--brand-navy)' : 'white',
+                color: useTextMode ? 'white' : 'var(--text-primary)',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+              }}
+            >
+              <MessageSquare size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Text
+            </button>
           </div>
         )}
 
-        {(status === 'starting' || status === 'processing') && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-muted)' }}>
-            <Loader2 size={24} className="spin" />
-            <span>{status === 'starting' ? `Connecting to ${INTERVIEWER_NAME}...` : 'Processing...'}</span>
-          </div>
-        )}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
+          {status === 'ready' && (
+            <button className="btn-sarvam" onClick={startInterview}>
+              <Phone size={18} /> Start Call
+            </button>
+          )}
+
+          {status === 'active' && !isSpeaking && !useTextMode && (
+            <>
+              {!isRecording ? (
+                <button
+                  className="btn-sarvam"
+                  onClick={startRecording}
+                  style={{ background: '#287A4F' }}
+                >
+                  <Mic size={18} /> Hold to Speak
+                </button>
+              ) : (
+                <button
+                  className="btn-sarvam"
+                  onClick={stopRecording}
+                  style={{ background: '#DC2626' }}
+                >
+                  <MicOff size={18} /> Release to Send
+                </button>
+              )}
+
+              <button className="btn-pill" onClick={endInterview}>
+                <PhoneOff size={18} /> End Call
+              </button>
+            </>
+          )}
+
+          {status === 'active' && !isSpeaking && useTextMode && (
+            <div style={{ display: 'flex', gap: '12px', width: '100%', maxWidth: '500px' }}>
+              <input
+                ref={textInputRef}
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendTextResponse()}
+                placeholder="Type your response..."
+                className="input-elegant"
+                style={{ flex: 1, padding: '12px 20px' }}
+                autoFocus
+              />
+              <button
+                className="btn-sarvam"
+                onClick={sendTextResponse}
+                disabled={!textInput.trim()}
+                style={{ padding: '12px 20px' }}
+              >
+                <Send size={18} />
+              </button>
+              <button className="btn-pill" onClick={endInterview}>
+                <PhoneOff size={18} />
+              </button>
+            </div>
+          )}
+
+          {status === 'active' && isSpeaking && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-muted)' }}>
+              <Volume2 size={24} className="pulse" />
+              <span>{INTERVIEWER_NAME} is speaking...</span>
+            </div>
+          )}
+
+          {(status === 'starting' || status === 'processing') && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-muted)' }}>
+              <Loader2 size={24} className="spin" />
+              <span>{status === 'starting' ? `Connecting to ${INTERVIEWER_NAME}...` : 'Processing...'}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

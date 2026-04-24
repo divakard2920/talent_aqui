@@ -31,19 +31,20 @@ class VoiceService:
         self.whisper_deployment = settings.azure_openai_whisper_deployment or "whisper"
 
     def _initialize_client(self):
-        """Initialize the Azure OpenAI client."""
-        azure_endpoint = settings.azure_openai_endpoint
-        azure_key = settings.azure_openai_api_key
+        """Initialize the Azure OpenAI client for voice services."""
+        # Use voice-specific endpoint/key if provided, otherwise fall back to main endpoint
+        azure_endpoint = settings.azure_openai_voice_endpoint or settings.azure_openai_endpoint
+        azure_key = settings.azure_openai_voice_key or settings.azure_openai_api_key
 
         if azure_endpoint and azure_key:
             self.client = AzureOpenAI(
                 api_key=azure_key,
-                api_version="2024-05-01-preview",  # Version that supports TTS/Whisper
+                api_version="2025-01-01-preview",  # Version that supports TTS/Whisper
                 azure_endpoint=azure_endpoint,
             )
         else:
             raise Exception(
-                "Azure OpenAI not configured. Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY."
+                "Azure OpenAI Voice not configured. Set AZURE_OPENAI_VOICE_ENDPOINT and AZURE_OPENAI_VOICE_KEY."
             )
 
     def text_to_speech(self, text: str) -> str:
