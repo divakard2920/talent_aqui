@@ -1923,6 +1923,62 @@ function InterviewsView({ showToast }) {
                                 </ul>
                               </div>
                             )}
+
+                            {/* Conversation Transcript */}
+                            {interview.transcript?.length > 0 && (
+                              <div style={{ marginTop: '20px', borderTop: '1px solid var(--border-light)', paddingTop: '16px' }}>
+                                <h5 style={{ margin: '0 0 12px', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                                  Conversation Transcript
+                                </h5>
+                                <div style={{
+                                  maxHeight: '300px',
+                                  overflowY: 'auto',
+                                  background: '#FAFAFA',
+                                  borderRadius: '8px',
+                                  padding: '12px',
+                                }}>
+                                  {interview.transcript.map((entry, idx) => (
+                                    <div
+                                      key={idx}
+                                      style={{
+                                        display: 'flex',
+                                        gap: '10px',
+                                        marginBottom: '12px',
+                                        flexDirection: entry.role === 'user' ? 'row-reverse' : 'row',
+                                      }}
+                                    >
+                                      <div style={{
+                                        width: '28px',
+                                        height: '28px',
+                                        borderRadius: '50%',
+                                        background: entry.role === 'assistant' ? 'var(--brand-navy)' : '#E5E5E5',
+                                        color: entry.role === 'assistant' ? 'white' : 'var(--text-primary)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 600,
+                                        flexShrink: 0,
+                                      }}>
+                                        {entry.role === 'assistant' ? 'A' : formatName(candidate?.name)?.charAt(0) || 'C'}
+                                      </div>
+                                      <div style={{
+                                        maxWidth: '80%',
+                                        padding: '8px 12px',
+                                        borderRadius: entry.role === 'assistant' ? '4px 12px 12px 12px' : '12px 4px 12px 12px',
+                                        background: entry.role === 'assistant' ? 'white' : 'var(--brand-navy)',
+                                        color: entry.role === 'assistant' ? 'var(--text-primary)' : 'white',
+                                        fontSize: '0.8rem',
+                                        lineHeight: 1.4,
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                      }}>
+                                        {entry.content}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
