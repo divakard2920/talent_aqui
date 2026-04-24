@@ -275,6 +275,33 @@ Keep it conversational and warm - this will be spoken aloud. About 4-5 sentences
 
     def generate_evaluation(self) -> dict:
         """Generate post-interview evaluation."""
+
+        # Count actual candidate responses (not empty or very short)
+        meaningful_responses = [
+            r for r in self.candidate_responses
+            if r and len(r.strip()) > 10
+        ]
+        num_responses = len(meaningful_responses)
+        total_words = sum(len(r.split()) for r in meaningful_responses)
+
+        # If candidate barely spoke, return incomplete evaluation
+        if num_responses < 3 or total_words < 50:
+            return {
+                "overall_score": 0,
+                "communication_score": 0,
+                "technical_score": 0,
+                "culture_fit_score": 0,
+                "enthusiasm_score": 0,
+                "recommendation": "reject",
+                "summary": f"Candidate did not engage in the screening call. Only {num_responses} meaningful responses with {total_words} total words. Unable to assess.",
+                "strengths": [],
+                "concerns": ["Candidate did not participate in the interview", "No responses to evaluate"],
+                "key_highlights": [],
+                "suggested_l2_questions": [],
+                "incomplete": True,
+                "reason": "insufficient_responses"
+            }
+
         transcript_text = "\n".join([
             f"{self.interviewer_name if entry['role'] == 'assistant' else 'Candidate'}: {entry['content']}"
             for entry in self.conversation_history
@@ -285,6 +312,14 @@ Keep it conversational and warm - this will be spoken aloud. About 4-5 sentences
 
         prompt = f"""You're {self.interviewer_name}, reviewing your notes after an L1 screening call. Provide your assessment of this candidate.
 
+**IMPORTANT EVALUATION RULES:**
+- If the candidate gave vague, one-word, or non-substantive answers, score LOW
+- If the candidate didn't demonstrate technical knowledge, technical_score should be LOW
+- If the candidate seemed disengaged or uninterested, enthusiasm_score should be LOW
+- Only recommend "proceed_to_l2" if they genuinely impressed you
+- "hold" means maybe worth another look but concerns exist
+- "reject" means not a fit based on this conversation
+
 **Position:** {job.get('title', 'N/A')}
 **Key Skills Needed:** {', '.join(job.get('skills_required', []))}
 **Experience Range:** {job.get('experience_min_years', 0)}-{job.get('experience_max_years', 'N/A')} years
@@ -292,29 +327,33 @@ Keep it conversational and warm - this will be spoken aloud. About 4-5 sentences
 **Candidate:** {candidate.get('name', 'N/A')}
 **Their Experience:** {candidate.get('total_years_experience', 'N/A')} years
 
+**Call Stats:**
+- Number of candidate responses: {num_responses}
+- Total words spoken by candidate: {total_words}
+
 **Call Transcript:**
 {transcript_text}
 
-Based on your conversation, provide your evaluation as JSON:
+Based on your conversation, provide your HONEST evaluation as JSON:
 {{
-    "overall_score": <0-100>,
-    "communication_score": <0-100 - how well did they articulate their thoughts?>,
-    "technical_score": <0-100 - depth of technical knowledge shown>,
-    "culture_fit_score": <0-100 - would they fit well with the team?>,
-    "enthusiasm_score": <0-100 - how interested did they seem in the role?>,
+    "overall_score": <0-100, be critical - 50 is average, only 70+ for strong candidates>,
+    "communication_score": <0-100 - clarity, articulation, listening. Short/vague answers = low score>,
+    "technical_score": <0-100 - actual technical depth shown. No technical discussion = low score>,
+    "culture_fit_score": <0-100 - attitude, values, professionalism>,
+    "enthusiasm_score": <0-100 - genuine interest shown. Disengaged = low score>,
     "recommendation": "<proceed_to_l2 / hold / reject>",
-    "summary": "<2-3 sentence summary of your impression - write as if you're briefing the hiring manager>",
-    "strengths": ["<what stood out positively>", "..."],
-    "concerns": ["<any red flags or areas to probe further>", "..."],
-    "key_highlights": ["<memorable things they mentioned>", "..."],
-    "suggested_l2_questions": ["<things the next interviewer should dig into>", "..."]
+    "summary": "<2-3 sentence honest assessment>",
+    "strengths": ["<only list if genuinely demonstrated>"],
+    "concerns": ["<be thorough about red flags>"],
+    "key_highlights": ["<only if they said something notable>"],
+    "suggested_l2_questions": ["<areas that need deeper probing>"]
 }}
 
-Return ONLY valid JSON."""
+Return ONLY valid JSON. Be honest and critical - a bad interview should get a bad score."""
 
         response = azure_openai_service.chat_completion(
             messages=[
-                {"role": "system", "content": f"You are {self.interviewer_name}, an experienced recruiter writing up your candidate assessment after a screening call."},
+                {"role": "system", "content": f"You are {self.interviewer_name}, an experienced recruiter. You give honest, critical assessments. You don't inflate scores. A candidate who barely spoke or gave weak answers gets low scores and a reject recommendation."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.3,

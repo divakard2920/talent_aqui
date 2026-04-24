@@ -174,6 +174,73 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
 
   // Render evaluation results
   if (status === 'completed' && evaluation) {
+    const isIncomplete = evaluation.incomplete || evaluation.overall_score === 0;
+
+    // Show incomplete/no-response state
+    if (isIncomplete) {
+      return (
+        <div style={{ padding: '24px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: '#FEE2E2',
+              color: '#DC2626',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '2rem',
+              margin: '0 auto 16px',
+            }}>
+              !
+            </div>
+            <h3 style={{ margin: '0 0 8px' }}>Incomplete Screening</h3>
+            <span style={{
+              padding: '6px 16px',
+              borderRadius: '20px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              background: '#FEE2E2',
+              color: '#DC2626',
+            }}>
+              Unable to Evaluate
+            </span>
+          </div>
+
+          <div style={{
+            background: '#FEF2F2',
+            border: '1px solid #FECACA',
+            borderRadius: '12px',
+            padding: '16px',
+            marginBottom: '20px'
+          }}>
+            <p style={{ margin: 0, color: '#991B1B', fontSize: '0.9rem' }}>
+              {evaluation.summary || "The candidate did not provide enough responses during the screening call to generate a meaningful evaluation."}
+            </p>
+          </div>
+
+          {evaluation.concerns?.length > 0 && (
+            <div style={{ marginBottom: '20px' }}>
+              <h4 style={{ fontSize: '0.9rem', color: '#DC2626', margin: '0 0 8px' }}>Issues</h4>
+              <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                {evaluation.concerns.map((c, i) => <li key={i}>{c}</li>)}
+              </ul>
+            </div>
+          )}
+
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+            Consider rescheduling the screening call or reaching out to the candidate to understand if there were technical issues.
+          </p>
+
+          <button className="btn-sarvam" style={{ width: '100%' }} onClick={onClose}>
+            Close
+          </button>
+        </div>
+      );
+    }
+
+    // Normal evaluation display
     return (
       <div style={{ padding: '24px' }}>
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>

@@ -40,6 +40,8 @@ class InterviewEvaluation(BaseModel):
     concerns: list[str]
     key_highlights: list[str]
     suggested_l2_questions: list[str]
+    incomplete: Optional[bool] = False  # True if candidate didn't engage
+    reason: Optional[str] = None  # Reason for incomplete (e.g., "insufficient_responses")
 
 
 class TranscriptEntry(BaseModel):
