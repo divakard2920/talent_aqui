@@ -276,16 +276,13 @@ Keep it conversational and warm - this will be spoken aloud. About 4-5 sentences
     def generate_evaluation(self) -> dict:
         """Generate post-interview evaluation."""
 
-        # Count actual candidate responses (not empty or very short)
-        meaningful_responses = [
-            r for r in self.candidate_responses
-            if r and len(r.strip()) > 10
-        ]
-        num_responses = len(meaningful_responses)
-        total_words = sum(len(r.split()) for r in meaningful_responses)
+        # Count all candidate responses
+        all_responses = [r for r in self.candidate_responses if r and r.strip()]
+        num_responses = len(all_responses)
+        total_words = sum(len(r.split()) for r in all_responses)
 
-        # If candidate barely spoke, return incomplete evaluation
-        if num_responses < 3 or total_words < 50:
+        # Only mark incomplete if candidate truly didn't engage (0-1 responses)
+        if num_responses < 2:
             return {
                 "overall_score": 0,
                 "communication_score": 0,
@@ -293,7 +290,7 @@ Keep it conversational and warm - this will be spoken aloud. About 4-5 sentences
                 "culture_fit_score": 0,
                 "enthusiasm_score": 0,
                 "recommendation": "reject",
-                "summary": f"Candidate did not engage in the screening call. Only {num_responses} meaningful responses with {total_words} total words. Unable to assess.",
+                "summary": f"Candidate did not engage in the screening call. Only {num_responses} response(s). Unable to assess.",
                 "strengths": [],
                 "concerns": ["Candidate did not participate in the interview", "No responses to evaluate"],
                 "key_highlights": [],
