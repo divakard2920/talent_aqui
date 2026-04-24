@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # GitHub (optional - for higher rate limits)
     github_access_token: str | None = None
 
+    # Azure OpenAI Voice Models (for AI Voice Interview)
+    azure_openai_tts_deployment: str | None = None  # e.g., "tts" or "tts-hd"
+    azure_openai_whisper_deployment: str | None = None  # e.g., "whisper"
+
     class Config:
         env_file = ".env"
 

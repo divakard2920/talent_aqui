@@ -28,8 +28,8 @@ import {
 } from 'lucide-react';
 import './index.css';
 import knorrLogo from './assets/knorr.png';
-import { jobsApi, candidatesApi, resumeApi, githubApi } from './services/api';
-import { Modal, JobForm, GitHubSearchForm, GitHubCandidateCard, ResumeUpload, CandidateResult, ConfirmDialog } from './components';
+import { jobsApi, candidatesApi, resumeApi, githubApi, interviewApi } from './services/api';
+import { Modal, JobForm, GitHubSearchForm, GitHubCandidateCard, ResumeUpload, CandidateResult, ConfirmDialog, InterviewRoom } from './components';
 
 // Simple SVG icons for GitHub and LinkedIn
 const GithubIcon = ({ size = 24, ...props }) => (
@@ -203,7 +203,7 @@ function DashboardView({ onNavigate }) {
       try {
         const [jobsRes, candidatesRes] = await Promise.all([
           jobsApi.list(),
-          candidatesApi.list({ limit: 5 }),
+          candidatesApi.list(),  // Get all candidates for accurate count
         ]);
 
         // Calculate average match score from all jobs
@@ -225,10 +225,10 @@ function DashboardView({ onNavigate }) {
 
         setStats({
           jobs: jobsRes.data.length,
-          candidates: candidatesRes.data.length,
+          candidates: candidatesRes.data.length,  // Now shows actual total
           avgScore,
         });
-        setTopCandidates(candidatesRes.data.slice(0, 3));
+        setTopCandidates(candidatesRes.data.slice(0, 3));  // Display only top 3
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
       } finally {
@@ -942,6 +942,10 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   const [matchingJob, setMatchingJob] = useState(null);
   const [showAllSkills, setShowAllSkills] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: 'warning', title: '', message: '', onConfirm: null });
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const [currentInterview, setCurrentInterview] = useState(null);
+  const [interviewJob, setInterviewJob] = useState(null);
+  const [creatingInterview, setCreatingInterview] = useState(false);
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
@@ -1052,10 +1056,48 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setShowAllSkills(false);
   };
 
-  const filteredCandidates = candidates.filter(c =>
-    c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const [interviewCandidate, setInterviewCandidate] = useState(null);
+
+  const handleScheduleInterview = async (candidateId, jobId) => {
+    const job = jobs.find(j => j.id === jobId);
+    const candidate = candidates.find(c => c.id === candidateId);
+    if (!job || !candidate) return;
+
+    setCreatingInterview(true);
+    try {
+      const res = await interviewApi.create(candidateId, jobId);
+      setCurrentInterview(res.data);
+      setInterviewJob(job);
+      setInterviewCandidate(candidate);
+      setShowDetailModal(false);  // Close detail modal but keep candidate data
+      setShowInterviewModal(true);
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to schedule screening call', 'error');
+    } finally {
+      setCreatingInterview(false);
+    }
+  };
+
+  const handleInterviewComplete = (result) => {
+    showToast(`Screening complete! Score: ${result.evaluation?.overall_score || 'N/A'}`, 'success');
+  };
+
+  const closeInterviewModal = () => {
+    setShowInterviewModal(false);
+    setCurrentInterview(null);
+    setInterviewJob(null);
+    setInterviewCandidate(null);
+  };
+
+  const filteredCandidates = candidates.filter(c => {
+    const term = searchTerm.toLowerCase();
+    const skills = c.parsed_data?.skills || [];
+    return (
+      c.name?.toLowerCase().includes(term) ||
+      c.email?.toLowerCase().includes(term) ||
+      skills.some(skill => skill.toLowerCase().includes(term))
+    );
+  });
 
   return (
     <motion.div
@@ -1078,7 +1120,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
       <div style={{ display: 'flex', gap: '12px' }}>
         <input
           type="text"
-          placeholder="Search by name or email..."
+          placeholder="Search by name, email, or skill..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="input-elegant"
@@ -1128,7 +1170,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
       </Modal>
 
       {/* Candidate Detail Modal */}
-      <Modal isOpen={showDetailModal} onClose={closeDetailModal} title={selectedCandidate ? `Candidate: ${selectedCandidate.name}` : ''} size="lg">
+      <Modal isOpen={showDetailModal} onClose={closeDetailModal} title={selectedCandidate ? `Candidate: ${formatName(selectedCandidate.name)}` : ''} size="lg">
         {selectedCandidate && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* Profile Info */}
@@ -1145,10 +1187,10 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
                 fontSize: '1.5rem',
                 flexShrink: 0,
               }}>
-                {selectedCandidate.source === 'github' ? <GithubIcon size={28} /> : selectedCandidate.name?.charAt(0) || '?'}
+                {selectedCandidate.source === 'github' ? <GithubIcon size={28} /> : formatName(selectedCandidate.name)?.charAt(0) || '?'}
               </div>
               <div style={{ flex: 1 }}>
-                <h3 style={{ margin: '0 0 4px' }}>{selectedCandidate.name}</h3>
+                <h3 style={{ margin: '0 0 4px' }}>{formatName(selectedCandidate.name)}</h3>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                   {selectedCandidate.email && (
                     <span><Mail size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />{selectedCandidate.email}</span>
@@ -1239,36 +1281,79 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
               </div>
             )}
 
-            {/* AI Assessment (for GitHub candidates) */}
+            {/* AI Assessment */}
             {selectedCandidate.parsed_data?.ai_assessment && (
               <div>
                 <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>AI Assessment</h4>
-                <div style={{ background: '#F4F4F4', padding: '16px', borderRadius: '12px' }}>
-                  {selectedCandidate.parsed_data.ai_assessment.summary && (
-                    <p style={{ margin: '0 0 12px', fontSize: '0.9rem', fontStyle: 'italic' }}>
-                      {selectedCandidate.parsed_data.ai_assessment.summary}
-                    </p>
-                  )}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border-light)' }}>
+                  {/* Score and Level Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+                    {selectedCandidate.parsed_data.ai_assessment.overall_score && (
+                      <div style={{
+                        width: '60px',
+                        height: '60px',
+                        borderRadius: '12px',
+                        background: selectedCandidate.parsed_data.ai_assessment.overall_score >= 80 ? '#E4F5E9' : selectedCandidate.parsed_data.ai_assessment.overall_score >= 60 ? '#E8EEF8' : '#F4F4F4',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        <span style={{ fontSize: '1.4rem', fontWeight: 700, color: selectedCandidate.parsed_data.ai_assessment.overall_score >= 80 ? '#287A4F' : selectedCandidate.parsed_data.ai_assessment.overall_score >= 60 ? '#2F5C8F' : 'var(--text-primary)' }}>
+                          {selectedCandidate.parsed_data.ai_assessment.overall_score}
+                        </span>
+                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>SCORE</span>
+                      </div>
+                    )}
+                    <div style={{ flex: 1 }}>
+                      {selectedCandidate.parsed_data.ai_assessment.summary && (
+                        <p style={{ margin: 0, fontSize: '0.9rem', fontStyle: 'italic', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                          "{selectedCandidate.parsed_data.ai_assessment.summary}"
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Badges */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
                     {selectedCandidate.parsed_data.ai_assessment.experience_level && (
-                      <span className="chip chip-blue">{selectedCandidate.parsed_data.ai_assessment.experience_level}</span>
+                      <span className="chip chip-blue" style={{ textTransform: 'capitalize' }}>{selectedCandidate.parsed_data.ai_assessment.experience_level}</span>
                     )}
                     {selectedCandidate.parsed_data.ai_assessment.recommendation && (
                       <span className={`chip ${selectedCandidate.parsed_data.ai_assessment.recommendation === 'highly_recommended' ? 'chip-green' : 'chip-navy'}`}>
                         {selectedCandidate.parsed_data.ai_assessment.recommendation.replace(/_/g, ' ')}
                       </span>
                     )}
+                    {selectedCandidate.parsed_data.ai_assessment.career_trajectory && (
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        {selectedCandidate.parsed_data.ai_assessment.career_trajectory}
+                      </span>
+                    )}
                   </div>
-                  {selectedCandidate.parsed_data.ai_assessment.strengths?.length > 0 && (
-                    <div style={{ marginTop: '12px' }}>
-                      <p style={{ margin: '0 0 6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Strengths:</p>
-                      <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                        {selectedCandidate.parsed_data.ai_assessment.strengths.slice(0, 3).map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+
+                  {/* Strengths & Areas for Growth */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    {selectedCandidate.parsed_data.ai_assessment.strengths?.length > 0 && (
+                      <div>
+                        <p style={{ margin: '0 0 8px', fontSize: '0.8rem', fontWeight: 600, color: '#287A4F' }}>Strengths</p>
+                        <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          {selectedCandidate.parsed_data.ai_assessment.strengths.slice(0, 3).map((s, i) => (
+                            <li key={i} style={{ marginBottom: '4px' }}>{s}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {selectedCandidate.parsed_data.ai_assessment.areas_for_growth?.length > 0 && (
+                      <div>
+                        <p style={{ margin: '0 0 8px', fontSize: '0.8rem', fontWeight: 600, color: '#92400E' }}>Areas for Growth</p>
+                        <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          {selectedCandidate.parsed_data.ai_assessment.areas_for_growth.slice(0, 2).map((s, i) => (
+                            <li key={i} style={{ marginBottom: '4px' }}>{s}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -1373,6 +1458,30 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
               </div>
             )}
 
+            {/* Schedule L1 Interview */}
+            {jobs.filter(j => j.status === 'open').length > 0 && (
+              <div style={{ background: 'linear-gradient(135deg, #E8EEF8 0%, #F0F4F8 100%)', padding: '16px', borderRadius: '16px', border: '1px solid var(--border-light)' }}>
+                <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: 'var(--brand-navy)' }}>Schedule L1 Screening Call</h4>
+                <p style={{ margin: '0 0 12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Connect this candidate with Arun for an initial screening call
+                </p>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {jobs.filter(j => j.status === 'open').map(job => (
+                    <button
+                      key={job.id}
+                      className="btn-sarvam"
+                      style={{ fontSize: '0.85rem', padding: '8px 16px' }}
+                      onClick={() => handleScheduleInterview(selectedCandidate.id, job.id)}
+                      disabled={creatingInterview}
+                    >
+                      {creatingInterview ? <Loader2 size={14} className="spin" /> : null}
+                      Screen for {job.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Job Matches */}
             <div>
               <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Job Matches</h4>
@@ -1417,6 +1526,24 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
         type={confirmDialog.type}
         confirmText="Delete"
       />
+
+      {/* Interview Modal */}
+      <Modal
+        isOpen={showInterviewModal}
+        onClose={closeInterviewModal}
+        title=""
+        size="lg"
+      >
+        {currentInterview && interviewCandidate && (
+          <InterviewRoom
+            interview={currentInterview}
+            candidate={interviewCandidate}
+            job={interviewJob}
+            onComplete={handleInterviewComplete}
+            onClose={closeInterviewModal}
+          />
+        )}
+      </Modal>
     </motion.div>
   );
 }

@@ -51,6 +51,13 @@ async def upload_resume(
     # Parse resume with AI
     parsed_data = resume_analyzer.parse_resume(resume_text)
 
+    # Generate AI assessment
+    ai_assessment = resume_analyzer.generate_ai_assessment(parsed_data)
+
+    # Add assessment to parsed data
+    parsed_dict = parsed_data.model_dump()
+    parsed_dict["ai_assessment"] = ai_assessment
+
     # Check if candidate already exists
     if parsed_data.email:
         result = await db.execute(
@@ -61,7 +68,7 @@ async def upload_resume(
             # Update existing candidate
             existing.resume_file_path = file_path
             existing.resume_text = resume_text
-            existing.parsed_data = parsed_data.model_dump()
+            existing.parsed_data = parsed_dict
             await db.commit()
             await db.refresh(existing)
             return existing
@@ -74,7 +81,7 @@ async def upload_resume(
         location=parsed_data.location,
         resume_file_path=file_path,
         resume_text=resume_text,
-        parsed_data=parsed_data.model_dump(),
+        parsed_data=parsed_dict,
         source="upload",
     )
 

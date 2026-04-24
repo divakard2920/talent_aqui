@@ -19,5 +19,10 @@ async def get_db():
 
 
 async def init_db():
+    # Import all models to ensure they're registered with Base
+    from app.models.job import Job
+    from app.models.candidate import Candidate, CandidateJobMatch
+    from app.models.interview import Interview
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

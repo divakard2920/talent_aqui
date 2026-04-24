@@ -295,6 +295,22 @@ button {
   animation: spin 1s linear infinite;
 }
 
+/* Pulse animation for speaking indicator */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+}
+
+.pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
 /* Toast / Alert styles */
 .toast {
   position: fixed;

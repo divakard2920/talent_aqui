@@ -59,31 +59,78 @@ Return ONLY valid JSON, no additional text."""
         parsed = azure_openai_service.parse_json_response(response)
         return ParsedResumeData(**parsed)
 
-    def generate_summary(self, parsed_data: ParsedResumeData) -> str:
-        """Generate a brief summary of the candidate."""
+    def generate_ai_assessment(self, parsed_data: ParsedResumeData) -> dict:
+        """Generate an AI assessment of the candidate profile."""
+        experience_list = ""
+        if parsed_data.experience:
+            for exp in parsed_data.experience[:5]:  # Limit to 5 most recent
+                if isinstance(exp, dict):
+                    experience_list += f"- {exp.get('title', 'N/A')} at {exp.get('company', 'N/A')} ({exp.get('start_date', '')} - {exp.get('end_date', '')})\n"
+
+        education_list = ""
+        if parsed_data.education:
+            for edu in parsed_data.education:
+                if isinstance(edu, dict):
+                    education_list += f"- {edu.get('degree', 'N/A')} in {edu.get('field', 'N/A')} from {edu.get('institution', 'N/A')}\n"
+
+        prompt = f"""Analyze this candidate profile and provide an assessment.
+
+**Candidate Profile:**
+- Name: {parsed_data.name}
+- Location: {parsed_data.location or 'Not specified'}
+- Total Experience: {parsed_data.total_years_experience or 'Unknown'} years
+- Skills: {', '.join(parsed_data.skills or []) or 'Not specified'}
+
+**Work Experience:**
+{experience_list or 'Not specified'}
+
+**Education:**
+{education_list or 'Not specified'}
+
+**Certifications:** {', '.join(parsed_data.certifications or []) or 'None'}
+
+**Summary from Resume:** {parsed_data.summary or 'Not provided'}
+
+Provide an assessment in JSON format:
+{{
+    "overall_score": <0-100 general profile strength>,
+    "experience_level": "<junior/mid/senior/principal based on years and roles>",
+    "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+    "areas_for_growth": ["<area 1>", "<area 2>"],
+    "summary": "<2-3 sentence professional summary highlighting key qualifications>",
+    "top_skills": ["<skill 1>", "<skill 2>", "<skill 3>", "<skill 4>", "<skill 5>"],
+    "career_trajectory": "<brief description of career progression>"
+}}
+
+Return ONLY valid JSON."""
+
         messages = [
             {
                 "role": "system",
-                "content": "You are a talent acquisition specialist. Write concise, professional summaries.",
+                "content": "You are an expert talent acquisition specialist. Provide objective, insightful candidate assessments.",
             },
-            {
-                "role": "user",
-                "content": f"""Based on this candidate profile, write a 2-3 sentence professional summary:
-
-Name: {parsed_data.name}
-Skills: {', '.join(parsed_data.skills or [])}
-Experience: {parsed_data.total_years_experience} years
-Recent Role: {parsed_data.experience[0] if parsed_data.experience else 'N/A'}
-
-Keep it brief and highlight key strengths.""",
-            },
+            {"role": "user", "content": prompt},
         ]
 
-        return azure_openai_service.chat_completion(
-            messages=messages,
-            temperature=0.7,
-            max_tokens=200,
-        )
+        try:
+            response = azure_openai_service.chat_completion(
+                messages=messages,
+                temperature=0.3,
+                response_format={"type": "json_object"},
+            )
+            return azure_openai_service.parse_json_response(response)
+        except Exception as e:
+            print(f"[ResumeAnalyzer] AI assessment failed: {e}")
+            # Return basic assessment on failure
+            return {
+                "overall_score": 50,
+                "experience_level": "unknown",
+                "strengths": [],
+                "areas_for_growth": [],
+                "summary": parsed_data.summary or "Assessment unavailable",
+                "top_skills": (parsed_data.skills or [])[:5],
+                "career_trajectory": "Unable to assess",
+            }
 
 
 resume_analyzer = ResumeAnalyzer()
