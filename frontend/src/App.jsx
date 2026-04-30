@@ -2049,7 +2049,7 @@ function WalkInsView({ showToast }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
   const [selectedCandidate, setSelectedCandidate] = useState(null);
-  const [showAnswers, setShowAnswers] = useState(false);
+  const [answersCandidate, setAnswersCandidate] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -2866,7 +2866,7 @@ function WalkInsView({ showToast }) {
           </div>
         )}
       {/* Candidate Detail Modal */}
-      <Modal isOpen={!!selectedCandidate} onClose={() => { setSelectedCandidate(null); setShowAnswers(false); }} title="Candidate Details">
+      <Modal isOpen={!!selectedCandidate} onClose={() => setSelectedCandidate(null)} title="Candidate Details">
         {selectedCandidate && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Basic Info */}
@@ -2973,104 +2973,11 @@ function WalkInsView({ showToast }) {
             {selectedCandidate.answers && Object.keys(selectedCandidate.answers).length > 0 && (
               <button
                 className="btn-pill"
-                onClick={() => setShowAnswers(!showAnswers)}
+                onClick={() => setAnswersCandidate(selectedCandidate)}
                 style={{ width: '100%', justifyContent: 'center' }}
               >
-                <Eye size={16} /> {showAnswers ? 'Hide Answers' : 'View Answers'}
+                <ClipboardList size={16} /> View Test Answers
               </button>
-            )}
-
-            {/* Answers Section */}
-            {showAnswers && selectedCandidate.answers && selectedDrive?.question_bank && (
-              <div style={{ background: '#F9FAFB', borderRadius: '12px', padding: '16px', maxHeight: '400px', overflowY: 'auto' }}>
-                <h4 style={{ margin: '0 0 16px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                  Test Answers ({selectedCandidate.assigned_questions?.length || 0} questions)
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {(selectedCandidate.assigned_questions || []).map((qId, idx) => {
-                    const question = selectedDrive.question_bank.find(q => q.id === qId);
-                    if (!question) return null;
-                    const answer = selectedCandidate.answers[qId];
-                    const isCorrect = question.type === 'mcq' && answer?.toUpperCase() === question.correct_answer?.toUpperCase();
-
-                    return (
-                      <div key={qId} style={{
-                        background: 'white',
-                        borderRadius: '8px',
-                        padding: '12px',
-                        border: question.type === 'mcq'
-                          ? `2px solid ${isCorrect ? '#10B981' : '#EF4444'}`
-                          : '1px solid #E5E7EB',
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            Q{idx + 1} • {question.skill} • {question.type.toUpperCase()}
-                          </span>
-                          {question.type === 'mcq' && (
-                            <span style={{
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
-                              color: isCorrect ? '#10B981' : '#EF4444',
-                            }}>
-                              {isCorrect ? '✓ Correct' : '✗ Wrong'}
-                            </span>
-                          )}
-                        </div>
-                        <p style={{ margin: '0 0 8px', fontSize: '0.9rem', fontWeight: 500 }}>
-                          {question.question}
-                        </p>
-
-                        {question.type === 'mcq' && question.options && (
-                          <div style={{ marginBottom: '8px' }}>
-                            {question.options.map(opt => (
-                              <div key={opt.label} style={{
-                                padding: '6px 10px',
-                                marginBottom: '4px',
-                                borderRadius: '4px',
-                                fontSize: '0.85rem',
-                                background: opt.label === question.correct_answer
-                                  ? '#DCFCE7'
-                                  : opt.label === answer && opt.label !== question.correct_answer
-                                    ? '#FEE2E2'
-                                    : '#F9FAFB',
-                                border: opt.label === answer ? '2px solid' : '1px solid #E5E7EB',
-                                borderColor: opt.label === answer
-                                  ? (opt.label === question.correct_answer ? '#10B981' : '#EF4444')
-                                  : '#E5E7EB',
-                              }}>
-                                <strong>{opt.label}.</strong> {opt.text}
-                                {opt.label === question.correct_answer && <span style={{ marginLeft: '8px', color: '#10B981' }}>✓</span>}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {question.type === 'short_answer' && (
-                          <div>
-                            <p style={{ margin: '0 0 4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Candidate's Answer:</p>
-                            <p style={{
-                              margin: 0,
-                              padding: '8px',
-                              background: '#EEF2FF',
-                              borderRadius: '4px',
-                              fontSize: '0.85rem',
-                              fontStyle: answer ? 'normal' : 'italic',
-                              color: answer ? 'inherit' : 'var(--text-muted)',
-                            }}>
-                              {answer || 'No answer provided'}
-                            </p>
-                            {question.expected_keywords && (
-                              <p style={{ margin: '8px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                Expected keywords: {question.expected_keywords.join(', ')}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             )}
 
             {/* Action Buttons */}
@@ -3101,6 +3008,237 @@ function WalkInsView({ showToast }) {
           </div>
         )}
       </Modal>
+
+      {/* Answers Modal */}
+      {answersCandidate && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.6)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '800px',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid #E5E7EB',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Test Answers</h2>
+                <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                  {answersCandidate.name} • Token #{answersCandidate.token_number} • Score: {Math.round(answersCandidate.test_score || 0)}%
+                </p>
+              </div>
+              <button
+                onClick={() => setAnswersCandidate(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  borderRadius: '8px',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{
+              padding: '24px',
+              overflowY: 'auto',
+              flex: 1,
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {(answersCandidate.assigned_questions || []).map((qId, idx) => {
+                  const question = selectedDrive?.question_bank?.find(q => q.id === qId);
+                  if (!question) return null;
+                  const answer = answersCandidate.answers?.[qId];
+                  const isCorrect = question.type === 'mcq' && answer?.toUpperCase() === question.correct_answer?.toUpperCase();
+
+                  return (
+                    <div key={qId} style={{
+                      background: '#F9FAFB',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      borderLeft: question.type === 'mcq'
+                        ? `4px solid ${isCorrect ? '#10B981' : '#EF4444'}`
+                        : '4px solid #6366F1',
+                    }}>
+                      {/* Question Header */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            background: 'var(--brand-navy)',
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                            fontSize: '0.9rem',
+                          }}>
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              background: '#E5E7EB',
+                              marginRight: '8px',
+                            }}>
+                              {question.skill}
+                            </span>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              background: question.type === 'mcq' ? '#DBEAFE' : '#E0E7FF',
+                              color: question.type === 'mcq' ? '#1D4ED8' : '#4338CA',
+                            }}>
+                              {question.type === 'mcq' ? 'Multiple Choice' : 'Short Answer'}
+                            </span>
+                          </div>
+                        </div>
+                        {question.type === 'mcq' && (
+                          <span style={{
+                            padding: '4px 12px',
+                            borderRadius: '20px',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            background: isCorrect ? '#DCFCE7' : '#FEE2E2',
+                            color: isCorrect ? '#166534' : '#991B1B',
+                          }}>
+                            {isCorrect ? '✓ Correct' : '✗ Incorrect'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Question Text */}
+                      <p style={{ margin: '0 0 16px', fontSize: '1rem', fontWeight: 500, lineHeight: 1.5 }}>
+                        {question.question}
+                      </p>
+
+                      {/* MCQ Options */}
+                      {question.type === 'mcq' && question.options && (
+                        <div style={{ display: 'grid', gap: '8px' }}>
+                          {question.options.map(opt => {
+                            const isSelected = opt.label === answer;
+                            const isCorrectOption = opt.label === question.correct_answer;
+
+                            return (
+                              <div key={opt.label} style={{
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                background: isCorrectOption
+                                  ? '#DCFCE7'
+                                  : isSelected && !isCorrectOption
+                                    ? '#FEE2E2'
+                                    : 'white',
+                                border: `2px solid ${
+                                  isCorrectOption
+                                    ? '#10B981'
+                                    : isSelected && !isCorrectOption
+                                      ? '#EF4444'
+                                      : '#E5E7EB'
+                                }`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                              }}>
+                                <span style={{
+                                  width: '28px',
+                                  height: '28px',
+                                  borderRadius: '50%',
+                                  background: isCorrectOption ? '#10B981' : isSelected ? '#EF4444' : '#E5E7EB',
+                                  color: isCorrectOption || isSelected ? 'white' : '#4B5563',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: 600,
+                                  fontSize: '0.85rem',
+                                }}>
+                                  {opt.label}
+                                </span>
+                                <span style={{ flex: 1 }}>{opt.text}</span>
+                                {isCorrectOption && <CheckCircle size={20} style={{ color: '#10B981' }} />}
+                                {isSelected && !isCorrectOption && <XCircle size={20} style={{ color: '#EF4444' }} />}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Short Answer */}
+                      {question.type === 'short_answer' && (
+                        <div>
+                          <p style={{ margin: '0 0 8px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                            Candidate's Answer:
+                          </p>
+                          <div style={{
+                            padding: '16px',
+                            background: 'white',
+                            borderRadius: '8px',
+                            border: '1px solid #E5E7EB',
+                            fontSize: '0.95rem',
+                            lineHeight: 1.6,
+                            fontStyle: answer ? 'normal' : 'italic',
+                            color: answer ? 'inherit' : 'var(--text-muted)',
+                          }}>
+                            {answer || 'No answer provided'}
+                          </div>
+                          {question.expected_keywords && question.expected_keywords.length > 0 && (
+                            <div style={{ marginTop: '12px' }}>
+                              <p style={{ margin: '0 0 6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                Expected Keywords:
+                              </p>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {question.expected_keywords.map((kw, i) => (
+                                  <span key={i} style={{
+                                    padding: '4px 10px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.8rem',
+                                    background: answer?.toLowerCase().includes(kw.toLowerCase()) ? '#DCFCE7' : '#F3F4F6',
+                                    color: answer?.toLowerCase().includes(kw.toLowerCase()) ? '#166534' : '#6B7280',
+                                    border: `1px solid ${answer?.toLowerCase().includes(kw.toLowerCase()) ? '#10B981' : '#E5E7EB'}`,
+                                  }}>
+                                    {kw}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirm Dialog */}
       <ConfirmDialog
@@ -3809,6 +3947,8 @@ function CandidateTestPortal({ driveId }) {
         setStage('result');
       } else if (!res.data.test_enabled) {
         setError('Test is not enabled for this drive');
+      } else if (res.data.drive_status === 'completed') {
+        setError('This drive has ended. Please contact HR for any queries.');
       } else if (res.data.drive_status !== 'ongoing') {
         setError('Test is not available yet. Please wait for the drive to start.');
       } else if (res.data.test_started && res.data.remaining_seconds > 0) {
