@@ -98,32 +98,46 @@ Return a JSON array of questions. Each question must have:
 
 Return ONLY valid JSON array, no other text."""
 
-        response = azure_openai_service.chat_completion(
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert technical recruiter creating assessment questions. Generate practical, fair questions that accurately test candidate skills at the specified experience level."
-                },
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=4000,
-            response_format={"type": "json_object"}
-        )
-
-        # Parse and validate questions
         try:
+            print(f"[QuestionGenerator] Generating {total_questions} questions for {job_title}")
+            print(f"[QuestionGenerator] Skills: {all_skills}")
+
+            response = azure_openai_service.chat_completion(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert technical recruiter creating assessment questions. Generate practical, fair questions that accurately test candidate skills at the specified experience level."
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=4000,
+                response_format={"type": "json_object"}
+            )
+
+            print(f"[QuestionGenerator] Raw response length: {len(response) if response else 0}")
+
             result = azure_openai_service.parse_json_response(response)
+            print(f"[QuestionGenerator] Parsed result type: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'N/A'}")
+
             questions = result.get("questions", result) if isinstance(result, dict) else result
+
+            if not isinstance(questions, list):
+                print(f"[QuestionGenerator] Questions is not a list: {type(questions)}")
+                return []
 
             # Add unique IDs if missing
             for i, q in enumerate(questions):
                 if not q.get("id"):
                     q["id"] = f"q{i+1}_{uuid.uuid4().hex[:6]}"
 
+            print(f"[QuestionGenerator] Generated {len(questions)} questions")
             return questions
+
         except Exception as e:
-            print(f"[QuestionGenerator] Error parsing questions: {e}")
+            import traceback
+            print(f"[QuestionGenerator] Error generating questions: {e}")
+            print(f"[QuestionGenerator] Traceback: {traceback.format_exc()}")
             return []
 
     def _get_experience_level(self, min_years: int, max_years: int) -> str:

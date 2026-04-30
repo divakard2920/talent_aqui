@@ -202,6 +202,11 @@ async def generate_questions(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    print(f"[GenerateQuestions] Job: {job.title}")
+    print(f"[GenerateQuestions] Skills Required: {job.skills_required}")
+    print(f"[GenerateQuestions] Skills Preferred: {job.skills_preferred}")
+    print(f"[GenerateQuestions] Experience: {job.experience_min_years}-{job.experience_max_years} years")
+
     # Generate questions
     questions = question_generator.generate_question_bank(
         job_title=job.title,
@@ -710,6 +715,52 @@ async def get_drive_stats(drive_id: int, db: AsyncSession = Depends(get_db)):
         shortlisted=shortlisted,
         average_score=avg_score,
     )
+
+
+# --- Candidate Test Portal ---
+
+@router.get("/{drive_id}/lookup")
+async def lookup_candidate(
+    drive_id: int,
+    phone: str | None = None,
+    token: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Lookup a candidate by phone or token number for test portal."""
+    result = await db.execute(select(WalkInDrive).where(WalkInDrive.id == drive_id))
+    drive = result.scalar_one_or_none()
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+
+    query = select(DriveRegistration).where(DriveRegistration.drive_id == drive_id)
+
+    if token:
+        query = query.where(DriveRegistration.token_number == token)
+    elif phone:
+        query = query.where(DriveRegistration.phone == phone)
+    else:
+        raise HTTPException(status_code=400, detail="Provide phone or token")
+
+    result = await db.execute(query)
+    registration = result.scalar_one_or_none()
+    if not registration:
+        raise HTTPException(status_code=404, detail="Registration not found")
+
+    if not registration.checked_in_at:
+        raise HTTPException(status_code=400, detail="Not checked in yet")
+
+    return {
+        "registration_id": registration.id,
+        "name": registration.name,
+        "token_number": registration.token_number,
+        "status": registration.status,
+        "test_started": registration.test_started_at is not None,
+        "test_completed": registration.test_completed_at is not None,
+        "test_score": registration.test_score,
+        "test_passed": registration.test_passed,
+        "test_enabled": drive.test_enabled,
+        "test_duration_minutes": drive.test_duration_minutes,
+    }
 
 
 @router.post("/{drive_id}/registrations/{registration_id}/shortlist")

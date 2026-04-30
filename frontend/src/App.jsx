@@ -118,6 +118,15 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Check for candidate test mode via URL parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const testDriveId = urlParams.get('test');
+
+  // If in test mode, show candidate test portal
+  if (testDriveId) {
+    return <CandidateTestPortal driveId={parseInt(testDriveId)} />;
+  }
+
   return (
     <>
       <div className="mesh-background">
@@ -2026,7 +2035,7 @@ function WalkInsView({ showToast }) {
     current_role: '',
   });
 
-  // Create form state
+  // Create/Edit form state
   const [formData, setFormData] = useState({
     job_id: '',
     title: '',
@@ -2037,6 +2046,7 @@ function WalkInsView({ showToast }) {
     test_duration_minutes: 30,
     passing_score_percent: 60,
   });
+  const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -2097,7 +2107,13 @@ function WalkInsView({ showToast }) {
     setSelectedDrive(drive);
     setDriveView('details');
 
-    // Fetch registrations and stats
+    // Clear old data immediately
+    setRegistrations([]);
+    setStats(null);
+    setLeaderboard([]);
+    setLastToken(null);
+
+    // Fetch registrations and stats for THIS drive
     try {
       const [regsRes, statsRes] = await Promise.all([
         walkinApi.getRegistrations(drive.id),
@@ -2147,6 +2163,45 @@ function WalkInsView({ showToast }) {
       showToast(`Drive status updated to ${status.replace('_', ' ')}`);
     } catch (err) {
       showToast('Failed to update status', 'error');
+    }
+  };
+
+  const handleOpenEdit = () => {
+    if (!selectedDrive) return;
+    // Pre-fill form with current drive data
+    setFormData({
+      job_id: selectedDrive.job_id,
+      title: selectedDrive.title,
+      drive_date: new Date(selectedDrive.drive_date).toISOString().slice(0, 16),
+      total_capacity: selectedDrive.total_capacity || '',
+      test_enabled: selectedDrive.test_enabled,
+      questions_per_candidate: selectedDrive.questions_per_candidate,
+      test_duration_minutes: selectedDrive.test_duration_minutes,
+      passing_score_percent: selectedDrive.passing_score_percent,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedDrive) return;
+
+    try {
+      const payload = {
+        title: formData.title,
+        drive_date: new Date(formData.drive_date).toISOString(),
+        total_capacity: formData.total_capacity ? parseInt(formData.total_capacity) : null,
+        test_enabled: formData.test_enabled,
+        questions_per_candidate: formData.questions_per_candidate,
+        test_duration_minutes: formData.test_duration_minutes,
+        passing_score_percent: formData.passing_score_percent,
+      };
+      const res = await walkinApi.update(selectedDrive.id, payload);
+      setSelectedDrive(res.data);
+      setDrives(prev => prev.map(d => d.id === res.data.id ? res.data : d));
+      setShowEditModal(false);
+      showToast('Drive updated successfully!');
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to update drive', 'error');
     }
   };
 
@@ -2297,23 +2352,29 @@ function WalkInsView({ showToast }) {
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {selectedDrive.status === 'draft' && (
               <>
-                {selectedDrive.test_enabled && !selectedDrive.question_bank?.length && (
+                <button className="btn-pill" onClick={handleOpenEdit}>
+                  <Edit3 size={16} /> Edit Drive
+                </button>
+                {selectedDrive.test_enabled && (
                   <button className="btn-sarvam" onClick={handleGenerateQuestions} disabled={generatingQuestions}>
                     {generatingQuestions ? <Loader2 size={16} className="spin" /> : <ClipboardList size={16} />}
-                    Generate Questions
+                    {selectedDrive.question_bank?.length ? 'Regenerate Questions' : 'Generate Questions'}
                   </button>
                 )}
-                {(!selectedDrive.test_enabled || selectedDrive.question_bank?.length > 0) && (
-                  <button className="btn-sarvam" onClick={() => handleUpdateStatus('registration_open')}>
-                    Open Registration
-                  </button>
-                )}
+                <button className="btn-sarvam" onClick={() => handleUpdateStatus('registration_open')}>
+                  Open Registration
+                </button>
               </>
             )}
             {selectedDrive.status === 'registration_open' && (
-              <button className="btn-pill" onClick={() => handleUpdateStatus('registration_closed')}>
-                Close Registration
-              </button>
+              <>
+                <button className="btn-sarvam" onClick={() => handleUpdateStatus('ongoing')}>
+                  <Play size={16} /> Start Drive
+                </button>
+                <button className="btn-pill" onClick={() => handleUpdateStatus('registration_closed')}>
+                  Close Registration
+                </button>
+              </>
             )}
             {selectedDrive.status === 'registration_closed' && (
               <button className="btn-sarvam" onClick={() => handleUpdateStatus('ongoing')}>
@@ -2389,6 +2450,43 @@ function WalkInsView({ showToast }) {
                 </>
               )}
             </div>
+
+            {/* Test Link for Candidates */}
+            {selectedDrive.test_enabled && selectedDrive.question_bank?.length > 0 && (
+              <div style={{
+                marginTop: '20px',
+                padding: '16px',
+                background: '#EEF2FF',
+                borderRadius: '8px',
+                border: '1px solid #C7D2FE',
+              }}>
+                <p style={{ margin: '0 0 8px', fontSize: '0.9rem', fontWeight: 600, color: '#4F46E5' }}>
+                  Candidate Test Portal
+                </p>
+                <p style={{ margin: '0 0 12px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Share this link with candidates or open on test kiosks:
+                </p>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={`${window.location.origin}?test=${selectedDrive.id}`}
+                    readOnly
+                    className="input-elegant"
+                    style={{ flex: 1, fontSize: '0.85rem' }}
+                  />
+                  <button
+                    className="btn-sarvam"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}?test=${selectedDrive.id}`);
+                      showToast('Test link copied!');
+                    }}
+                    style={{ padding: '8px 16px' }}
+                  >
+                    Copy Link
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -2888,6 +2986,93 @@ function WalkInsView({ showToast }) {
           </button>
         </div>
       </Modal>
+
+      {/* Edit Drive Modal */}
+      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Walk-in Drive">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 500 }}>Drive Title *</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="e.g., Backend Developer Walk-in - May 2026"
+              className="input-elegant"
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 500 }}>Drive Date *</label>
+            <input
+              type="datetime-local"
+              value={formData.drive_date}
+              onChange={(e) => setFormData({ ...formData, drive_date: e.target.value })}
+              className="input-elegant"
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 500 }}>Expected Capacity (optional)</label>
+            <input
+              type="number"
+              value={formData.total_capacity}
+              onChange={(e) => setFormData({ ...formData, total_capacity: e.target.value ? parseInt(e.target.value) : '' })}
+              placeholder="Leave empty for no limit"
+              className="input-elegant"
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <input
+              type="checkbox"
+              id="edit_test_enabled"
+              checked={formData.test_enabled}
+              onChange={(e) => setFormData({ ...formData, test_enabled: e.target.checked })}
+              style={{ width: '18px', height: '18px' }}
+            />
+            <label htmlFor="edit_test_enabled" style={{ fontSize: '0.9rem' }}>Enable Assessment Test</label>
+          </div>
+
+          {formData.test_enabled && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', padding: '16px', background: '#F9FAFB', borderRadius: '12px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
+                <input
+                  type="number"
+                  value={formData.questions_per_candidate}
+                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
+                  className="input-elegant"
+                  style={{ padding: '8px 12px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
+                <input
+                  type="number"
+                  value={formData.test_duration_minutes}
+                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
+                  className="input-elegant"
+                  style={{ padding: '8px 12px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
+                <input
+                  type="number"
+                  value={formData.passing_score_percent}
+                  onChange={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
+                  className="input-elegant"
+                  style={{ padding: '8px 12px' }}
+                />
+              </div>
+            </div>
+          )}
+
+          <button className="btn-sarvam" onClick={handleSaveEdit} style={{ marginTop: '8px' }}>
+            Save Changes
+          </button>
+        </div>
+      </Modal>
     </motion.div>
   );
 }
@@ -3175,6 +3360,463 @@ function GitHubView({ showToast }) {
         )}
       </Modal>
     </motion.div>
+  );
+}
+
+// --- Candidate Test Portal ---
+function CandidateTestPortal({ driveId }) {
+  const [stage, setStage] = useState('login'); // login, test, result
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [phone, setPhone] = useState('');
+  const [candidate, setCandidate] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [answers, setAnswers] = useState({});
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState(null);
+
+  // Timer effect
+  useEffect(() => {
+    if (stage !== 'test' || timeLeft === null) return;
+
+    if (timeLeft <= 0) {
+      handleSubmit();
+      return;
+    }
+
+    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [timeLeft, stage]);
+
+  const handleLookup = async () => {
+    if (!phone.trim()) {
+      setError('Please enter your phone number');
+      return;
+    }
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await walkinApi.lookupCandidate(driveId, { phone: phone.trim() });
+      setCandidate(res.data);
+
+      if (res.data.test_completed) {
+        setResult({
+          score: res.data.test_score,
+          passed: res.data.test_passed,
+        });
+        setStage('result');
+      } else if (!res.data.test_enabled) {
+        setError('Test is not enabled for this drive');
+      } else {
+        // Ready to start or continue test
+        setStage('ready');
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not find your registration');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStartTest = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await walkinApi.startTest(driveId, candidate.registration_id);
+      setQuestions(res.data.questions);
+      setTimeLeft(res.data.duration_minutes * 60);
+      setStage('test');
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not start test');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAnswerChange = (questionId, answer) => {
+    setAnswers(prev => ({ ...prev, [questionId]: answer }));
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+
+    try {
+      const res = await walkinApi.submitTest(driveId, candidate.registration_id, { answers });
+      setResult({
+        score: res.data.score_percent,
+        passed: res.data.passed,
+        earned: res.data.earned_points,
+        total: res.data.total_points,
+      });
+      setStage('result');
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not submit test');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '20px',
+    }}>
+      <div style={{
+        maxWidth: stage === 'test' ? '900px' : '500px',
+        margin: '0 auto',
+      }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '24px', color: 'white' }}>
+          <h1 style={{ margin: '0 0 8px', fontSize: '1.8rem' }}>Walk-in Assessment</h1>
+          {candidate && (
+            <p style={{ margin: 0, opacity: 0.9 }}>
+              Welcome, {candidate.name} (Token #{candidate.token_number})
+            </p>
+          )}
+        </div>
+
+        {/* Login Stage */}
+        {stage === 'login' && (
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <h2 style={{ margin: '0 0 24px', textAlign: 'center' }}>Enter Your Details</h2>
+
+            {error && (
+              <div style={{
+                background: '#FEE2E2',
+                color: '#DC2626',
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                fontSize: '0.9rem',
+              }}>
+                {error}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+                placeholder="Enter registered phone number"
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  fontSize: '1.1rem',
+                  border: '2px solid #E5E7EB',
+                  borderRadius: '8px',
+                  outline: 'none',
+                }}
+                autoFocus
+              />
+            </div>
+
+            <button
+              onClick={handleLookup}
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '14px',
+                background: '#4F46E5',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '1.1rem',
+                fontWeight: 600,
+                cursor: loading ? 'wait' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+              }}
+            >
+              {loading ? <Loader2 size={20} className="spin" /> : <Search size={20} />}
+              Find My Registration
+            </button>
+          </div>
+        )}
+
+        {/* Ready Stage */}
+        {stage === 'ready' && candidate && (
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            textAlign: 'center',
+          }}>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: '#4F46E5',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '2rem',
+              fontWeight: 700,
+              margin: '0 auto 20px',
+            }}>
+              {candidate.token_number}
+            </div>
+
+            <h2 style={{ margin: '0 0 8px' }}>{candidate.name}</h2>
+            <p style={{ color: '#6B7280', margin: '0 0 24px' }}>Token #{candidate.token_number}</p>
+
+            <div style={{
+              background: '#F3F4F6',
+              borderRadius: '12px',
+              padding: '20px',
+              marginBottom: '24px',
+            }}>
+              <h3 style={{ margin: '0 0 12px', fontSize: '1rem' }}>Test Instructions</h3>
+              <ul style={{ textAlign: 'left', margin: 0, paddingLeft: '20px', color: '#4B5563' }}>
+                <li>Duration: {candidate.test_duration_minutes} minutes</li>
+                <li>Questions: Multiple choice and short answer</li>
+                <li>Do not refresh or close the browser</li>
+                <li>Test auto-submits when time runs out</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={handleStartTest}
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '16px',
+                background: '#10B981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '1.1rem',
+                fontWeight: 600,
+                cursor: loading ? 'wait' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+              }}
+            >
+              {loading ? <Loader2 size={20} className="spin" /> : <Play size={20} />}
+              Start Test
+            </button>
+          </div>
+        )}
+
+        {/* Test Stage */}
+        {stage === 'test' && (
+          <div>
+            {/* Timer Bar */}
+            <div style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '16px 24px',
+              marginBottom: '20px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            }}>
+              <span style={{ fontWeight: 600 }}>
+                {Object.keys(answers).length} / {questions.length} answered
+              </span>
+              <span style={{
+                fontSize: '1.5rem',
+                fontWeight: 700,
+                color: timeLeft < 60 ? '#DC2626' : timeLeft < 300 ? '#F59E0B' : '#10B981',
+              }}>
+                <Clock size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+                {formatTime(timeLeft)}
+              </span>
+            </div>
+
+            {/* Questions */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {questions.map((q, idx) => (
+                <div key={q.id} style={{
+                  background: 'white',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <span style={{
+                      background: '#E5E7EB',
+                      padding: '4px 10px',
+                      borderRadius: '4px',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                    }}>
+                      Q{idx + 1} - {q.skill}
+                    </span>
+                    <span style={{ fontSize: '0.85rem', color: '#6B7280' }}>{q.points} pts</span>
+                  </div>
+
+                  <p style={{ margin: '0 0 16px', fontSize: '1.05rem', lineHeight: 1.5 }}>
+                    {q.question}
+                  </p>
+
+                  {q.type === 'mcq' && q.options && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {q.options.map((opt) => (
+                        <label
+                          key={opt.label}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '12px 16px',
+                            background: answers[q.id] === opt.label ? '#EEF2FF' : '#F9FAFB',
+                            border: answers[q.id] === opt.label ? '2px solid #4F46E5' : '2px solid transparent',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name={q.id}
+                            value={opt.label}
+                            checked={answers[q.id] === opt.label}
+                            onChange={() => handleAnswerChange(q.id, opt.label)}
+                            style={{ width: '18px', height: '18px' }}
+                          />
+                          <span><strong>{opt.label}.</strong> {opt.text}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {q.type === 'short_answer' && (
+                    <textarea
+                      value={answers[q.id] || ''}
+                      onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                      placeholder="Type your answer here..."
+                      rows={4}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '2px solid #E5E7EB',
+                        borderRadius: '8px',
+                        fontSize: '1rem',
+                        resize: 'vertical',
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Submit Button */}
+            <div style={{ marginTop: '24px' }}>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                style={{
+                  width: '100%',
+                  padding: '18px',
+                  background: '#4F46E5',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '1.2rem',
+                  fontWeight: 600,
+                  cursor: submitting ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                }}
+              >
+                {submitting ? <Loader2 size={24} className="spin" /> : <CheckCircle size={24} />}
+                Submit Test
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Result Stage */}
+        {stage === 'result' && result && (
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '40px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            textAlign: 'center',
+          }}>
+            <div style={{
+              width: '100px',
+              height: '100px',
+              borderRadius: '50%',
+              background: result.passed ? '#10B981' : '#EF4444',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 24px',
+            }}>
+              {result.passed ? <Trophy size={50} /> : <XCircle size={50} />}
+            </div>
+
+            <h2 style={{ margin: '0 0 8px', fontSize: '2rem' }}>
+              {result.passed ? 'Congratulations!' : 'Test Completed'}
+            </h2>
+
+            <p style={{ color: '#6B7280', margin: '0 0 24px', fontSize: '1.1rem' }}>
+              {result.passed
+                ? 'You have passed the assessment!'
+                : 'Thank you for taking the assessment.'}
+            </p>
+
+            <div style={{
+              fontSize: '4rem',
+              fontWeight: 700,
+              color: result.passed ? '#10B981' : '#EF4444',
+              marginBottom: '16px',
+            }}>
+              {Math.round(result.score)}%
+            </div>
+
+            <p style={{ color: '#6B7280', margin: 0 }}>
+              {result.earned && `${result.earned} / ${result.total} points`}
+            </p>
+
+            <div style={{
+              marginTop: '32px',
+              padding: '20px',
+              background: '#F3F4F6',
+              borderRadius: '12px',
+            }}>
+              <p style={{ margin: 0, color: '#4B5563' }}>
+                {result.passed
+                  ? 'Please wait for further instructions from the HR team.'
+                  : 'Please check with the HR desk for next steps.'}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

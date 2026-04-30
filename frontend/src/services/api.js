@@ -101,6 +101,9 @@ export const walkinApi = {
   // Walk-in registration (front desk - register + check-in in one step)
   walkinRegister: (driveId, data) => api.post(`/walkin-drives/${driveId}/walkin`, data),
 
+  // Candidate test portal
+  lookupCandidate: (driveId, params) => api.get(`/walkin-drives/${driveId}/lookup`, { params }),
+
   // Test
   startTest: (driveId, registrationId) =>
     api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/start-test`),
