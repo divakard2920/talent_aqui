@@ -78,7 +78,7 @@ class QuestionGenerator:
 Distribute questions across these skills proportionally: {', '.join(all_skills)}
 
 **Output Format:**
-Return a JSON array of questions. Each question must have:
+Return a JSON object with a "questions" key containing an array. Each question must have:
 - id: unique string (e.g., "q1", "q2")
 - type: "mcq" or "short_answer"
 - skill: which skill this tests
@@ -89,6 +89,9 @@ Return a JSON array of questions. Each question must have:
 - expected_keywords: (for short_answer only) key concepts the answer should include
 - points: 5 for easy, 10 for intermediate, 15 for hard
 
+Example format:
+{{"questions": [{{"id": "q1", "type": "mcq", "skill": "Python", "difficulty": "easy", "question": "...", "options": [...], "correct_answer": "A", "points": 5}}]}}
+
 **Important:**
 - Questions must match the {experience_min_years}-{experience_max_years} year experience level
 - MCQ should have exactly 4 options (A, B, C, D)
@@ -96,7 +99,7 @@ Return a JSON array of questions. Each question must have:
 - Cover practical, real-world scenarios relevant to the role
 - Avoid trick questions or overly academic topics
 
-Return ONLY valid JSON array, no other text."""
+Return ONLY valid JSON object with "questions" array."""
 
         try:
             print(f"[QuestionGenerator] Generating {total_questions} questions for {job_title}")
@@ -106,12 +109,12 @@ Return ONLY valid JSON array, no other text."""
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert technical recruiter creating assessment questions. Generate practical, fair questions that accurately test candidate skills at the specified experience level."
+                        "content": "You are an expert technical recruiter creating assessment questions. Generate practical, fair questions that accurately test candidate skills at the specified experience level. Always respond with valid JSON only."
                     },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
-                max_tokens=4000,
+                max_tokens=8000,  # Increased for 50 questions
                 response_format={"type": "json_object"}
             )
 

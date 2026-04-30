@@ -2138,7 +2138,7 @@ function WalkInsView({ showToast }) {
 
     try {
       const res = await walkinApi.generateQuestions(selectedDrive.id, {
-        total_questions: 50,
+        total_questions: selectedDrive.questions_per_candidate,
         mcq_ratio: 0.7,
       });
       showToast(`Generated ${res.data.question_count} questions!`);

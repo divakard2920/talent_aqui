@@ -37,18 +37,49 @@ class AzureOpenAIService:
         response = self.client.chat.completions.create(**kwargs)
         return response.choices[0].message.content
 
-    def parse_json_response(self, response: str) -> dict:
+    def parse_json_response(self, response: str) -> dict | list:
         """Parse a JSON response from the model."""
-        # Try to extract JSON from the response
+        if not response:
+            raise ValueError("Empty response from model")
+
+        # Clean up common issues
+        cleaned = response.strip()
+
+        # Remove markdown code blocks if present
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
+        # Try to parse directly
         try:
-            return json.loads(response)
-        except json.JSONDecodeError:
-            # Try to find JSON within the response
-            start = response.find("{")
-            end = response.rfind("}") + 1
+            return json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            print(f"[AzureOpenAI] JSON parse error: {e}")
+            print(f"[AzureOpenAI] Response preview: {cleaned[:500]}...")
+
+            # Try to find JSON object within the response
+            start = cleaned.find("{")
+            end = cleaned.rfind("}") + 1
             if start != -1 and end > start:
-                return json.loads(response[start:end])
-            raise ValueError("Could not parse JSON from response")
+                try:
+                    return json.loads(cleaned[start:end])
+                except json.JSONDecodeError:
+                    pass
+
+            # Try to find JSON array within the response
+            start = cleaned.find("[")
+            end = cleaned.rfind("]") + 1
+            if start != -1 and end > start:
+                try:
+                    return json.loads(cleaned[start:end])
+                except json.JSONDecodeError:
+                    pass
+
+            raise ValueError(f"Could not parse JSON from response: {e}")
 
 
 azure_openai_service = AzureOpenAIService()
