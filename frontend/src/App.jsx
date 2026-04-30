@@ -2562,7 +2562,26 @@ function WalkInsView({ showToast }) {
             <div className="sovereign-card">
               <h3 style={{ margin: '0 0 16px' }}>Front Desk - Walk-in Registration</h3>
 
-              {lastToken && (
+              {/* Show message if registration is not open */}
+              {!['registration_open', 'ongoing'].includes(selectedDrive.status) && (
+                <div style={{
+                  background: '#FEF3C7',
+                  border: '1px solid #F59E0B',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  textAlign: 'center',
+                }}>
+                  <AlertCircle size={32} style={{ color: '#F59E0B', marginBottom: '8px' }} />
+                  <p style={{ margin: 0, fontWeight: 600, color: '#92400E' }}>
+                    {selectedDrive.status === 'draft' && 'Drive is in draft. Open registration to start.'}
+                    {selectedDrive.status === 'registration_closed' && 'Registration is closed.'}
+                    {selectedDrive.status === 'completed' && 'Drive has been completed.'}
+                    {selectedDrive.status === 'cancelled' && 'Drive has been cancelled.'}
+                  </p>
+                </div>
+              )}
+
+              {['registration_open', 'ongoing'].includes(selectedDrive.status) && lastToken && (
                 <div style={{
                   background: '#E8F5E9',
                   border: '2px solid #4CAF50',
@@ -2589,7 +2608,7 @@ function WalkInsView({ showToast }) {
                 </div>
               )}
 
-              {!lastToken && (
+              {['registration_open', 'ongoing'].includes(selectedDrive.status) && !lastToken && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div>
                     <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Full Name *</label>
