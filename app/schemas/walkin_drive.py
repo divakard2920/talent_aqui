@@ -118,6 +118,9 @@ class RegistrationResponse(BaseModel):
     checked_in_at: Optional[datetime] = None
     test_score: Optional[float] = None
     test_passed: Optional[bool] = None
+    test_score_breakdown: Optional[dict] = None
+    assigned_questions: Optional[list] = None
+    answers: Optional[dict] = None
     registered_at: datetime
 
     class Config:

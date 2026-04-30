@@ -2049,6 +2049,7 @@ function WalkInsView({ showToast }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
   const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [showAnswers, setShowAnswers] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -2865,7 +2866,7 @@ function WalkInsView({ showToast }) {
           </div>
         )}
       {/* Candidate Detail Modal */}
-      <Modal isOpen={!!selectedCandidate} onClose={() => setSelectedCandidate(null)} title="Candidate Details">
+      <Modal isOpen={!!selectedCandidate} onClose={() => { setSelectedCandidate(null); setShowAnswers(false); }} title="Candidate Details">
         {selectedCandidate && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Basic Info */}
@@ -2964,6 +2965,110 @@ function WalkInsView({ showToast }) {
                       </p>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* View Answers Button */}
+            {selectedCandidate.answers && Object.keys(selectedCandidate.answers).length > 0 && (
+              <button
+                className="btn-pill"
+                onClick={() => setShowAnswers(!showAnswers)}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                <Eye size={16} /> {showAnswers ? 'Hide Answers' : 'View Answers'}
+              </button>
+            )}
+
+            {/* Answers Section */}
+            {showAnswers && selectedCandidate.answers && selectedDrive?.question_bank && (
+              <div style={{ background: '#F9FAFB', borderRadius: '12px', padding: '16px', maxHeight: '400px', overflowY: 'auto' }}>
+                <h4 style={{ margin: '0 0 16px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                  Test Answers ({selectedCandidate.assigned_questions?.length || 0} questions)
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {(selectedCandidate.assigned_questions || []).map((qId, idx) => {
+                    const question = selectedDrive.question_bank.find(q => q.id === qId);
+                    if (!question) return null;
+                    const answer = selectedCandidate.answers[qId];
+                    const isCorrect = question.type === 'mcq' && answer?.toUpperCase() === question.correct_answer?.toUpperCase();
+
+                    return (
+                      <div key={qId} style={{
+                        background: 'white',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        border: question.type === 'mcq'
+                          ? `2px solid ${isCorrect ? '#10B981' : '#EF4444'}`
+                          : '1px solid #E5E7EB',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            Q{idx + 1} • {question.skill} • {question.type.toUpperCase()}
+                          </span>
+                          {question.type === 'mcq' && (
+                            <span style={{
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              color: isCorrect ? '#10B981' : '#EF4444',
+                            }}>
+                              {isCorrect ? '✓ Correct' : '✗ Wrong'}
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ margin: '0 0 8px', fontSize: '0.9rem', fontWeight: 500 }}>
+                          {question.question}
+                        </p>
+
+                        {question.type === 'mcq' && question.options && (
+                          <div style={{ marginBottom: '8px' }}>
+                            {question.options.map(opt => (
+                              <div key={opt.label} style={{
+                                padding: '6px 10px',
+                                marginBottom: '4px',
+                                borderRadius: '4px',
+                                fontSize: '0.85rem',
+                                background: opt.label === question.correct_answer
+                                  ? '#DCFCE7'
+                                  : opt.label === answer && opt.label !== question.correct_answer
+                                    ? '#FEE2E2'
+                                    : '#F9FAFB',
+                                border: opt.label === answer ? '2px solid' : '1px solid #E5E7EB',
+                                borderColor: opt.label === answer
+                                  ? (opt.label === question.correct_answer ? '#10B981' : '#EF4444')
+                                  : '#E5E7EB',
+                              }}>
+                                <strong>{opt.label}.</strong> {opt.text}
+                                {opt.label === question.correct_answer && <span style={{ marginLeft: '8px', color: '#10B981' }}>✓</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {question.type === 'short_answer' && (
+                          <div>
+                            <p style={{ margin: '0 0 4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Candidate's Answer:</p>
+                            <p style={{
+                              margin: 0,
+                              padding: '8px',
+                              background: '#EEF2FF',
+                              borderRadius: '4px',
+                              fontSize: '0.85rem',
+                              fontStyle: answer ? 'normal' : 'italic',
+                              color: answer ? 'inherit' : 'var(--text-muted)',
+                            }}>
+                              {answer || 'No answer provided'}
+                            </p>
+                            {question.expected_keywords && (
+                              <p style={{ margin: '8px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                Expected keywords: {question.expected_keywords.join(', ')}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
