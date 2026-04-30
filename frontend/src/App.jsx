@@ -2205,6 +2205,23 @@ function WalkInsView({ showToast }) {
     }
   };
 
+  const handleDeleteDrive = async () => {
+    if (!selectedDrive) return;
+
+    if (!window.confirm(`Are you sure you want to delete "${selectedDrive.title}"? This will also delete all registrations.`)) {
+      return;
+    }
+
+    try {
+      await walkinApi.delete(selectedDrive.id);
+      setDrives(prev => prev.filter(d => d.id !== selectedDrive.id));
+      setSelectedDrive(null);
+      showToast('Drive deleted successfully');
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to delete drive', 'error');
+    }
+  };
+
   const handleWalkinRegister = async () => {
     if (!walkinForm.name || !walkinForm.email || !walkinForm.phone || !selectedDrive) {
       showToast('Name, email, and phone are required', 'error');
@@ -2354,6 +2371,13 @@ function WalkInsView({ showToast }) {
               <>
                 <button className="btn-pill" onClick={handleOpenEdit}>
                   <Edit3 size={16} /> Edit Drive
+                </button>
+                <button
+                  className="btn-pill"
+                  onClick={handleDeleteDrive}
+                  style={{ color: '#DC2626', borderColor: '#DC2626' }}
+                >
+                  <Trash2 size={16} /> Delete
                 </button>
                 {selectedDrive.test_enabled && (
                   <button className="btn-sarvam" onClick={handleGenerateQuestions} disabled={generatingQuestions}>
@@ -2798,6 +2822,92 @@ function WalkInsView({ showToast }) {
             )}
           </div>
         )}
+      {/* Edit Drive Modal (for detail view) */}
+      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Walk-in Drive">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 500 }}>Drive Title *</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="e.g., Backend Developer Walk-in - May 2026"
+              className="input-elegant"
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 500 }}>Drive Date *</label>
+            <input
+              type="datetime-local"
+              value={formData.drive_date}
+              onChange={(e) => setFormData({ ...formData, drive_date: e.target.value })}
+              className="input-elegant"
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 500 }}>Expected Capacity (optional)</label>
+            <input
+              type="number"
+              value={formData.total_capacity}
+              onChange={(e) => setFormData({ ...formData, total_capacity: e.target.value ? parseInt(e.target.value) : '' })}
+              placeholder="Leave empty for no limit"
+              className="input-elegant"
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <input
+              type="checkbox"
+              id="edit_test_enabled_detail"
+              checked={formData.test_enabled}
+              onChange={(e) => setFormData({ ...formData, test_enabled: e.target.checked })}
+              style={{ width: '18px', height: '18px' }}
+            />
+            <label htmlFor="edit_test_enabled_detail" style={{ fontSize: '0.9rem' }}>Enable Assessment Test</label>
+          </div>
+
+          {formData.test_enabled && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', padding: '16px', background: '#F9FAFB', borderRadius: '12px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
+                <input
+                  type="number"
+                  value={formData.questions_per_candidate}
+                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
+                  className="input-elegant"
+                  style={{ padding: '8px 12px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
+                <input
+                  type="number"
+                  value={formData.test_duration_minutes}
+                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
+                  className="input-elegant"
+                  style={{ padding: '8px 12px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
+                <input
+                  type="number"
+                  value={formData.passing_score_percent}
+                  onChange={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
+                  className="input-elegant"
+                  style={{ padding: '8px 12px' }}
+                />
+              </div>
+            </div>
+          )}
+
+          <button className="btn-sarvam" onClick={handleSaveEdit} style={{ marginTop: '8px' }}>
+            Save Changes
+          </button>
+        </div>
+      </Modal>
       </motion.div>
     );
   }
