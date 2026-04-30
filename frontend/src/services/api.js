@@ -101,6 +101,11 @@ export const walkinApi = {
   // Walk-in registration (front desk - register + check-in in one step)
   walkinRegister: (driveId, data) => api.post(`/walkin-drives/${driveId}/walkin`, data),
 
+  // Walk-in registration with resume
+  walkinRegisterWithResume: (driveId, formData) => api.post(`/walkin-drives/${driveId}/walkin-with-resume`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+
   // Candidate test portal
   lookupCandidate: (driveId, params) => api.get(`/walkin-drives/${driveId}/lookup`, { params }),
 
@@ -121,6 +126,8 @@ export const walkinApi = {
     api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/shortlist`),
   reject: (driveId, registrationId) =>
     api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/reject`),
+  startInterview: (driveId, registrationId) =>
+    api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/start-interview`),
 };
 
 export default api;

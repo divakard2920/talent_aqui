@@ -487,6 +487,95 @@ async def walkin_register(
     )
 
 
+@router.post("/{drive_id}/walkin-with-resume")
+async def walkin_register_with_resume(
+    drive_id: int,
+    name: str = Form(...),
+    email: str = Form(...),
+    phone: str = Form(...),
+    experience_years: float = Form(None),
+    current_company: str = Form(None),
+    current_role: str = Form(None),
+    resume: UploadFile = File(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Register a walk-in candidate with resume upload.
+    """
+    import os
+    import uuid as uuid_lib
+
+    result = await db.execute(select(WalkInDrive).where(WalkInDrive.id == drive_id))
+    drive = result.scalar_one_or_none()
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+
+    # Check if already registered
+    result = await db.execute(
+        select(DriveRegistration).where(
+            DriveRegistration.drive_id == drive_id,
+            (DriveRegistration.email == email) | (DriveRegistration.phone == phone),
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        if existing.checked_in_at:
+            raise HTTPException(status_code=400, detail=f"Already checked in with token #{existing.token_number}")
+
+    # Save resume if provided
+    resume_path = None
+    if resume and resume.filename:
+        upload_dir = "uploads/walkin_resumes"
+        os.makedirs(upload_dir, exist_ok=True)
+        file_ext = os.path.splitext(resume.filename)[1]
+        unique_filename = f"{uuid_lib.uuid4().hex}{file_ext}"
+        resume_path = os.path.join(upload_dir, unique_filename)
+
+        with open(resume_path, "wb") as f:
+            content = await resume.read()
+            f.write(content)
+
+    # Assign token number
+    result = await db.execute(
+        select(func.max(DriveRegistration.token_number)).where(
+            DriveRegistration.drive_id == drive_id
+        )
+    )
+    max_token = result.scalar() or 0
+    token_number = max_token + 1
+
+    # Create registration
+    registration = DriveRegistration(
+        drive_id=drive_id,
+        name=name,
+        email=email,
+        phone=phone,
+        experience_years=experience_years,
+        current_company=current_company,
+        current_role=current_role,
+        resume_path=resume_path,
+        registration_code=generate_registration_code(),
+        token_number=token_number,
+        checked_in_at=datetime.utcnow(),
+        status=RegistrationStatus.CHECKED_IN.value,
+    )
+
+    db.add(registration)
+    await db.commit()
+    await db.refresh(registration)
+
+    return {
+        "registration": {
+            "id": registration.id,
+            "name": registration.name,
+            "token_number": registration.token_number,
+            "status": registration.status,
+        },
+        "token_number": token_number,
+        "message": f"Registered successfully! Token number: {token_number}",
+    }
+
+
 # --- Test Taking ---
 
 @router.post("/{drive_id}/registrations/{registration_id}/start-test", response_model=StartTestResponse)
@@ -881,3 +970,77 @@ async def reject_candidate(
     await db.commit()
 
     return {"status": "rejected"}
+
+
+@router.post("/{drive_id}/registrations/{registration_id}/start-interview")
+async def start_walkin_interview(
+    drive_id: int,
+    registration_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Create an interview for a shortlisted walk-in candidate.
+    Creates a candidate record if needed, then creates the interview.
+    """
+    from app.models.candidate import Candidate
+    from app.models.interview import Interview, InterviewStatus
+
+    # Get drive and registration
+    result = await db.execute(select(WalkInDrive).where(WalkInDrive.id == drive_id))
+    drive = result.scalar_one_or_none()
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+
+    result = await db.execute(
+        select(DriveRegistration).where(
+            DriveRegistration.id == registration_id,
+            DriveRegistration.drive_id == drive_id,
+        )
+    )
+    registration = result.scalar_one_or_none()
+    if not registration:
+        raise HTTPException(status_code=404, detail="Registration not found")
+
+    if registration.status != RegistrationStatus.SHORTLISTED.value:
+        raise HTTPException(status_code=400, detail="Candidate must be shortlisted to start interview")
+
+    # Check if candidate already exists (by email)
+    result = await db.execute(
+        select(Candidate).where(Candidate.email == registration.email)
+    )
+    candidate = result.scalar_one_or_none()
+
+    if not candidate:
+        # Create new candidate record
+        candidate = Candidate(
+            name=registration.name,
+            email=registration.email,
+            phone=registration.phone,
+            resume_file_path=registration.resume_path if hasattr(registration, 'resume_path') else None,
+            source="walkin_drive",
+            source_id=f"drive_{drive_id}_reg_{registration_id}",
+        )
+        db.add(candidate)
+        await db.commit()
+        await db.refresh(candidate)
+
+    # Link candidate to registration
+    registration.candidate_id = candidate.id
+    await db.commit()
+
+    # Create interview
+    interview = Interview(
+        candidate_id=candidate.id,
+        job_id=drive.job_id,
+        status=InterviewStatus.SCHEDULED.value,
+    )
+    db.add(interview)
+    await db.commit()
+    await db.refresh(interview)
+
+    return {
+        "interview_id": interview.id,
+        "candidate_id": candidate.id,
+        "job_id": drive.job_id,
+        "status": interview.status,
+    }

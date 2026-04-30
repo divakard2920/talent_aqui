@@ -1006,6 +1006,40 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     }
   }, [viewCandidateId, candidates, clearViewCandidateId]);
 
+  // Handle interview URL parameter (from walk-in shortlist)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const interviewId = urlParams.get('interview');
+    if (interviewId) {
+      // Fetch interview and start it
+      const loadInterview = async () => {
+        try {
+          const interviewRes = await interviewApi.get(interviewId);
+          const interview = interviewRes.data;
+
+          // Fetch job details
+          const jobRes = await jobsApi.get(interview.job_id);
+          const job = jobRes.data;
+
+          // Fetch candidate details
+          const candidateRes = await candidatesApi.get(interview.candidate_id);
+          const candidate = candidateRes.data;
+
+          setCurrentInterview(interview);
+          setInterviewJob(job);
+          setInterviewCandidate(candidate);
+          setShowInterviewModal(true);
+
+          // Clean up URL
+          window.history.replaceState({}, '', window.location.pathname);
+        } catch (err) {
+          console.error('Failed to load interview:', err);
+        }
+      };
+      loadInterview();
+    }
+  }, []);
+
   const handleUpload = async (file) => {
     setUploading(true);
     try {
@@ -2034,6 +2068,7 @@ function WalkInsView({ showToast }) {
     current_company: '',
     current_role: '',
   });
+  const [resumeFile, setResumeFile] = useState(null);
 
   // Create/Edit form state
   const [formData, setFormData] = useState({
@@ -2237,11 +2272,26 @@ function WalkInsView({ showToast }) {
     setWalkinRegistering(true);
 
     try {
-      const payload = {
-        ...walkinForm,
-        experience_years: walkinForm.experience_years ? parseFloat(walkinForm.experience_years) : null,
-      };
-      const res = await walkinApi.walkinRegister(selectedDrive.id, payload);
+      let res;
+      if (resumeFile) {
+        // Use FormData for file upload
+        const formData = new FormData();
+        formData.append('name', walkinForm.name);
+        formData.append('email', walkinForm.email);
+        formData.append('phone', walkinForm.phone);
+        if (walkinForm.experience_years) formData.append('experience_years', walkinForm.experience_years);
+        if (walkinForm.current_company) formData.append('current_company', walkinForm.current_company);
+        if (walkinForm.current_role) formData.append('current_role', walkinForm.current_role);
+        formData.append('resume', resumeFile);
+        res = await walkinApi.walkinRegisterWithResume(selectedDrive.id, formData);
+      } else {
+        const payload = {
+          ...walkinForm,
+          experience_years: walkinForm.experience_years ? parseFloat(walkinForm.experience_years) : null,
+        };
+        res = await walkinApi.walkinRegister(selectedDrive.id, payload);
+      }
+
       setLastToken({
         token_number: res.data.token_number,
         name: res.data.registration.name,
@@ -2257,6 +2307,7 @@ function WalkInsView({ showToast }) {
         current_company: '',
         current_role: '',
       });
+      setResumeFile(null);
 
       // Refresh registrations
       const regsRes = await walkinApi.getRegistrations(selectedDrive.id);
@@ -2682,6 +2733,26 @@ function WalkInsView({ showToast }) {
                       className="input-elegant"
                       placeholder="e.g., Acme Corp"
                     />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Resume (optional)</label>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => setResumeFile(e.target.files[0] || null)}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        border: '1px solid #E5E7EB',
+                        borderRadius: '8px',
+                        fontSize: '0.9rem',
+                      }}
+                    />
+                    {resumeFile && (
+                      <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#6B7280' }}>
+                        Selected: {resumeFile.name}
+                      </p>
+                    )}
                   </div>
                   <button
                     className="btn-sarvam"
@@ -4441,10 +4512,42 @@ function CandidateTestPortal({ driveId }) {
                 borderRadius: '12px',
               }}>
                 <h3 style={{ margin: '0 0 12px', color: '#166534' }}>You've been Shortlisted!</h3>
-                <p style={{ margin: 0, color: '#166534' }}>
-                  Congratulations! Please proceed to the Interview Room for the next round.
-                  Keep your token number handy.
+                <p style={{ margin: '0 0 16px', color: '#166534' }}>
+                  Congratulations! You are now eligible for Level 1 Interview with Arun.
                 </p>
+                <button
+                  onClick={async () => {
+                    try {
+                      setLoading(true);
+                      // Create interview via API
+                      const res = await walkinApi.startInterview(driveId, candidate.registration_id);
+                      // Navigate to interview page with interview ID
+                      window.location.href = `/?interview=${res.data.interview_id}`;
+                    } catch (err) {
+                      setError(err.response?.data?.detail || 'Failed to start interview');
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 24px',
+                    background: loading ? '#9CA3AF' : '#166534',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    width: '100%',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {loading ? <Loader2 size={18} className="spin" /> : <Phone size={18} />}
+                  {loading ? 'Starting Interview...' : 'Continue to Level 1 Interview with Arun'}
+                </button>
               </div>
             )}
 
