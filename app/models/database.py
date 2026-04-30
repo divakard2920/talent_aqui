@@ -23,6 +23,7 @@ async def init_db():
     from app.models.job import Job
     from app.models.candidate import Candidate, CandidateJobMatch
     from app.models.interview import Interview
+    from app.models.walkin_drive import WalkInDrive, DriveRegistration
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

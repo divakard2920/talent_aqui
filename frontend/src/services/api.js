@@ -72,4 +72,47 @@ export const interviewApi = {
   cancel: (id) => api.delete(`/interviews/${id}`),
 };
 
+// Walk-in Drive API
+export const walkinApi = {
+  // Drive management
+  list: (params = {}) => api.get('/walkin-drives/', { params }),
+  get: (id) => api.get(`/walkin-drives/${id}`),
+  create: (data) => api.post('/walkin-drives/', data),
+  update: (id, data) => api.patch(`/walkin-drives/${id}`, data),
+  delete: (id) => api.delete(`/walkin-drives/${id}`),
+
+  // Questions
+  generateQuestions: (driveId, config = {}) =>
+    api.post(`/walkin-drives/${driveId}/generate-questions`, config),
+  updateQuestions: (driveId, questions) =>
+    api.put(`/walkin-drives/${driveId}/questions`, questions),
+
+  // Registration (public)
+  getDriveBySlug: (slug) => api.get(`/walkin-drives/register/${slug}`),
+  register: (driveId, data) => api.post(`/walkin-drives/${driveId}/register`, data),
+
+  // Registrations management
+  getRegistrations: (driveId, params = {}) =>
+    api.get(`/walkin-drives/${driveId}/registrations`, { params }),
+
+  // Check-in
+  checkIn: (driveId, data) => api.post(`/walkin-drives/${driveId}/checkin`, data),
+
+  // Test
+  startTest: (driveId, registrationId) =>
+    api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/start-test`),
+  submitTest: (driveId, registrationId, answers) =>
+    api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/submit-test`, { answers }),
+
+  // Results
+  getLeaderboard: (driveId) => api.get(`/walkin-drives/${driveId}/leaderboard`),
+  getStats: (driveId) => api.get(`/walkin-drives/${driveId}/stats`),
+
+  // Actions
+  shortlist: (driveId, registrationId) =>
+    api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/shortlist`),
+  reject: (driveId, registrationId) =>
+    api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/reject`),
+};
+
 export default api;

@@ -27,10 +27,18 @@ import {
   Check,
   ChevronDown,
   Phone,
+  Calendar,
+  ClipboardList,
+  QrCode,
+  Play,
+  Trophy,
+  UserCheck,
+  UserX,
+  Clock,
 } from 'lucide-react';
 import './index.css';
 import knorrLogo from './assets/knorr.png';
-import { jobsApi, candidatesApi, resumeApi, githubApi, interviewApi } from './services/api';
+import { jobsApi, candidatesApi, resumeApi, githubApi, interviewApi, walkinApi } from './services/api';
 import { Modal, JobForm, GitHubSearchForm, GitHubCandidateCard, ResumeUpload, CandidateResult, ConfirmDialog, InterviewRoom } from './components';
 
 // Simple SVG icons for GitHub and LinkedIn
@@ -150,7 +158,7 @@ function App() {
           </div>
 
           <nav style={{ display: 'flex', gap: '8px' }}>
-            {['dashboard', 'jobs', 'candidates', 'interviews', 'github'].map((tab) => (
+            {['dashboard', 'jobs', 'candidates', 'interviews', 'walk-ins', 'github'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -169,7 +177,7 @@ function App() {
                 }}
               >
                 {tab === 'github' && <GithubIcon size={14} />}
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'walk-ins' ? 'Walk-ins' : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </nav>
@@ -183,6 +191,7 @@ function App() {
           {activeTab === 'jobs' && <JobsView key="jobs" showToast={showToast} onViewCandidate={handleViewCandidate} />}
           {activeTab === 'candidates' && <CandidatesView key="candidates" showToast={showToast} viewCandidateId={viewCandidateId} clearViewCandidateId={() => setViewCandidateId(null)} />}
           {activeTab === 'interviews' && <InterviewsView key="interviews" showToast={showToast} />}
+          {activeTab === 'walk-ins' && <WalkInsView key="walk-ins" showToast={showToast} />}
           {activeTab === 'github' && <GitHubView key="github" showToast={showToast} />}
         </AnimatePresence>
       </main>
@@ -1990,6 +1999,757 @@ function InterviewsView({ showToast }) {
           ))}
         </div>
       )}
+    </motion.div>
+  );
+}
+
+// --- Walk-ins View ---
+function WalkInsView({ showToast }) {
+  const [drives, setDrives] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedDrive, setSelectedDrive] = useState(null);
+  const [driveView, setDriveView] = useState('details'); // details, registrations, checkin, leaderboard
+  const [registrations, setRegistrations] = useState([]);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [generatingQuestions, setGeneratingQuestions] = useState(false);
+  const [checkInCode, setCheckInCode] = useState('');
+  const [checkingIn, setCheckingIn] = useState(false);
+
+  // Create form state
+  const [formData, setFormData] = useState({
+    job_id: '',
+    title: '',
+    drive_date: '',
+    total_capacity: '',
+    test_enabled: true,
+    questions_per_candidate: 20,
+    test_duration_minutes: 30,
+    passing_score_percent: 60,
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [drivesRes, jobsRes] = await Promise.all([
+        walkinApi.list(),
+        jobsApi.list(),
+      ]);
+      setDrives(drivesRes.data);
+      setJobs(jobsRes.data);
+    } catch (err) {
+      console.error('Failed to fetch data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateDrive = async () => {
+    if (!formData.job_id || !formData.title || !formData.drive_date) {
+      showToast('Please fill all required fields', 'error');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...formData,
+        job_id: parseInt(formData.job_id),
+        drive_date: new Date(formData.drive_date).toISOString(),
+      };
+      // Only include capacity if set
+      if (!formData.total_capacity) {
+        delete payload.total_capacity;
+      }
+      const res = await walkinApi.create(payload);
+      setDrives(prev => [res.data, ...prev]);
+      setShowCreateModal(false);
+      setFormData({
+        job_id: '',
+        title: '',
+        drive_date: '',
+        total_capacity: '',
+        test_enabled: true,
+        questions_per_candidate: 20,
+        test_duration_minutes: 30,
+        passing_score_percent: 60,
+      });
+      showToast('Walk-in drive created!');
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to create drive', 'error');
+    }
+  };
+
+  const handleSelectDrive = async (drive) => {
+    setSelectedDrive(drive);
+    setDriveView('details');
+
+    // Fetch registrations and stats
+    try {
+      const [regsRes, statsRes] = await Promise.all([
+        walkinApi.getRegistrations(drive.id),
+        walkinApi.getStats(drive.id),
+      ]);
+      setRegistrations(regsRes.data);
+      setStats(statsRes.data);
+
+      if (drive.test_enabled) {
+        const lbRes = await walkinApi.getLeaderboard(drive.id);
+        setLeaderboard(lbRes.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch drive data:', err);
+    }
+  };
+
+  const handleGenerateQuestions = async () => {
+    if (!selectedDrive) return;
+    setGeneratingQuestions(true);
+
+    try {
+      const res = await walkinApi.generateQuestions(selectedDrive.id, {
+        total_questions: 50,
+        mcq_ratio: 0.7,
+      });
+      showToast(`Generated ${res.data.question_count} questions!`);
+
+      // Refresh drive
+      const driveRes = await walkinApi.get(selectedDrive.id);
+      setSelectedDrive(driveRes.data);
+      setDrives(prev => prev.map(d => d.id === driveRes.data.id ? driveRes.data : d));
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to generate questions', 'error');
+    } finally {
+      setGeneratingQuestions(false);
+    }
+  };
+
+  const handleUpdateStatus = async (status) => {
+    if (!selectedDrive) return;
+
+    try {
+      const res = await walkinApi.update(selectedDrive.id, { status });
+      setSelectedDrive(res.data);
+      setDrives(prev => prev.map(d => d.id === res.data.id ? res.data : d));
+      showToast(`Drive status updated to ${status.replace('_', ' ')}`);
+    } catch (err) {
+      showToast('Failed to update status', 'error');
+    }
+  };
+
+  const handleCheckIn = async () => {
+    if (!checkInCode.trim() || !selectedDrive) return;
+    setCheckingIn(true);
+
+    try {
+      const res = await walkinApi.checkIn(selectedDrive.id, {
+        registration_code: checkInCode.trim().toUpperCase(),
+      });
+      showToast(`Checked in: ${res.data.registration.name} - Token #${res.data.token_number}`);
+      setCheckInCode('');
+
+      // Refresh registrations
+      const regsRes = await walkinApi.getRegistrations(selectedDrive.id);
+      setRegistrations(regsRes.data);
+
+      const statsRes = await walkinApi.getStats(selectedDrive.id);
+      setStats(statsRes.data);
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Check-in failed', 'error');
+    } finally {
+      setCheckingIn(false);
+    }
+  };
+
+  const handleShortlist = async (registrationId) => {
+    try {
+      await walkinApi.shortlist(selectedDrive.id, registrationId);
+      showToast('Candidate shortlisted!');
+
+      const regsRes = await walkinApi.getRegistrations(selectedDrive.id);
+      setRegistrations(regsRes.data);
+      const lbRes = await walkinApi.getLeaderboard(selectedDrive.id);
+      setLeaderboard(lbRes.data);
+    } catch (err) {
+      showToast('Failed to shortlist', 'error');
+    }
+  };
+
+  const handleReject = async (registrationId) => {
+    try {
+      await walkinApi.reject(selectedDrive.id, registrationId);
+      showToast('Candidate rejected');
+
+      const regsRes = await walkinApi.getRegistrations(selectedDrive.id);
+      setRegistrations(regsRes.data);
+    } catch (err) {
+      showToast('Failed to reject', 'error');
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'draft': return '#6B7280';
+      case 'registration_open': return '#2563EB';
+      case 'registration_closed': return '#F59E0B';
+      case 'ongoing': return '#10B981';
+      case 'completed': return '#6B7280';
+      case 'cancelled': return '#EF4444';
+      default: return '#6B7280';
+    }
+  };
+
+  if (loading) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-center" style={{ padding: '80px' }}>
+        <Loader2 size={32} className="spin" />
+      </motion.div>
+    );
+  }
+
+  // Drive detail view
+  if (selectedDrive) {
+    const job = jobs.find(j => j.id === selectedDrive.job_id);
+
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+        {/* Back button */}
+        <button
+          onClick={() => setSelectedDrive(null)}
+          className="btn-pill"
+          style={{ marginBottom: '20px' }}
+        >
+          <ArrowRight size={16} style={{ transform: 'rotate(180deg)' }} /> Back to Drives
+        </button>
+
+        {/* Drive Header */}
+        <div className="sovereign-card" style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+            <div>
+              <h2 style={{ margin: '0 0 8px' }}>{selectedDrive.title}</h2>
+              <p style={{ margin: 0, color: 'var(--text-muted)' }}>
+                {job?.title} • {new Date(selectedDrive.drive_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+            <span style={{
+              padding: '6px 16px',
+              borderRadius: '20px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              background: `${getStatusColor(selectedDrive.status)}20`,
+              color: getStatusColor(selectedDrive.status),
+            }}>
+              {selectedDrive.status.replace('_', ' ').toUpperCase()}
+            </span>
+          </div>
+
+          {/* Stats */}
+          {stats && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
+              {[
+                { label: 'Registered', value: stats.total_registered, icon: Users },
+                { label: 'Checked In', value: stats.checked_in, icon: UserCheck },
+                { label: 'Tested', value: stats.tested, icon: ClipboardList },
+                { label: 'Passed', value: stats.passed, icon: Trophy },
+                { label: 'Shortlisted', value: stats.shortlisted, icon: CheckCircle },
+              ].map((stat, i) => (
+                <div key={i} style={{ textAlign: 'center', padding: '12px', background: '#F9FAFB', borderRadius: '12px' }}>
+                  <stat.icon size={20} style={{ color: 'var(--brand-navy)', marginBottom: '4px' }} />
+                  <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>{stat.value}</p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{stat.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {selectedDrive.status === 'draft' && (
+              <>
+                {selectedDrive.test_enabled && !selectedDrive.question_bank?.length && (
+                  <button className="btn-sarvam" onClick={handleGenerateQuestions} disabled={generatingQuestions}>
+                    {generatingQuestions ? <Loader2 size={16} className="spin" /> : <ClipboardList size={16} />}
+                    Generate Questions
+                  </button>
+                )}
+                {(!selectedDrive.test_enabled || selectedDrive.question_bank?.length > 0) && (
+                  <button className="btn-sarvam" onClick={() => handleUpdateStatus('registration_open')}>
+                    Open Registration
+                  </button>
+                )}
+              </>
+            )}
+            {selectedDrive.status === 'registration_open' && (
+              <button className="btn-pill" onClick={() => handleUpdateStatus('registration_closed')}>
+                Close Registration
+              </button>
+            )}
+            {selectedDrive.status === 'registration_closed' && (
+              <button className="btn-sarvam" onClick={() => handleUpdateStatus('ongoing')}>
+                <Play size={16} /> Start Drive
+              </button>
+            )}
+            {selectedDrive.status === 'ongoing' && (
+              <button className="btn-pill" onClick={() => handleUpdateStatus('completed')}>
+                Complete Drive
+              </button>
+            )}
+
+            {/* Copy registration link */}
+            {selectedDrive.registration_slug && (
+              <button
+                className="btn-pill"
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/register/${selectedDrive.registration_slug}`);
+                  showToast('Registration link copied!');
+                }}
+              >
+                Copy Registration Link
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+          {['details', 'registrations', 'checkin', ...(selectedDrive.test_enabled ? ['leaderboard'] : [])].map(tab => (
+            <button
+              key={tab}
+              className={driveView === tab ? 'btn-sarvam' : 'btn-pill'}
+              onClick={() => setDriveView(tab)}
+              style={{ textTransform: 'capitalize' }}
+            >
+              {tab === 'checkin' ? 'Check-in' : tab}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        {driveView === 'details' && (
+          <div className="sovereign-card">
+            <h3 style={{ margin: '0 0 16px' }}>Drive Configuration</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Capacity</p>
+                <p style={{ margin: 0, fontWeight: 600 }}>{selectedDrive.total_capacity || 'No limit'}</p>
+              </div>
+              <div>
+                <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Test Enabled</p>
+                <p style={{ margin: 0, fontWeight: 600 }}>{selectedDrive.test_enabled ? 'Yes' : 'No'}</p>
+              </div>
+              {selectedDrive.test_enabled && (
+                <>
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Questions per Candidate</p>
+                    <p style={{ margin: 0, fontWeight: 600 }}>{selectedDrive.questions_per_candidate}</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Test Duration</p>
+                    <p style={{ margin: 0, fontWeight: 600 }}>{selectedDrive.test_duration_minutes} minutes</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Passing Score</p>
+                    <p style={{ margin: 0, fontWeight: 600 }}>{selectedDrive.passing_score_percent}%</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Question Bank</p>
+                    <p style={{ margin: 0, fontWeight: 600 }}>{selectedDrive.question_bank?.length || 0} questions</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {driveView === 'registrations' && (
+          <div className="sovereign-card">
+            <h3 style={{ margin: '0 0 16px' }}>Registrations ({registrations.length})</h3>
+            {registrations.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)' }}>No registrations yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {registrations.map(reg => (
+                  <div key={reg.id} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px 16px',
+                    background: '#F9FAFB',
+                    borderRadius: '8px',
+                  }}>
+                    <div>
+                      <p style={{ margin: 0, fontWeight: 600 }}>{reg.name}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        {reg.email} • {reg.phone} • Code: {reg.registration_code}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      {reg.token_number && (
+                        <span style={{ fontWeight: 600, color: 'var(--brand-navy)' }}>#{reg.token_number}</span>
+                      )}
+                      {reg.test_score !== null && (
+                        <span className={`chip ${reg.test_passed ? 'chip-green' : 'chip-navy'}`}>
+                          {Math.round(reg.test_score)}%
+                        </span>
+                      )}
+                      <span className="chip chip-blue" style={{ textTransform: 'capitalize' }}>
+                        {reg.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {driveView === 'checkin' && (
+          <div className="sovereign-card">
+            <h3 style={{ margin: '0 0 16px' }}>Check-in Desk</h3>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+              <input
+                type="text"
+                value={checkInCode}
+                onChange={(e) => setCheckInCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && handleCheckIn()}
+                placeholder="Enter registration code..."
+                className="input-elegant"
+                style={{ flex: 1 }}
+              />
+              <button className="btn-sarvam" onClick={handleCheckIn} disabled={checkingIn || !checkInCode.trim()}>
+                {checkingIn ? <Loader2 size={18} className="spin" /> : <UserCheck size={18} />}
+                Check In
+              </button>
+            </div>
+
+            {/* Recent check-ins */}
+            <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Recent Check-ins</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {registrations
+                .filter(r => r.checked_in_at)
+                .sort((a, b) => new Date(b.checked_in_at) - new Date(a.checked_in_at))
+                .slice(0, 10)
+                .map(reg => (
+                  <div key={reg.id} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px 16px',
+                    background: '#E8F5E9',
+                    borderRadius: '8px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        background: 'var(--brand-navy)',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                      }}>
+                        {reg.token_number}
+                      </span>
+                      <div>
+                        <p style={{ margin: 0, fontWeight: 600 }}>{reg.name}</p>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>{reg.registration_code}</p>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      {new Date(reg.checked_in_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {driveView === 'leaderboard' && selectedDrive.test_enabled && (
+          <div className="sovereign-card">
+            <h3 style={{ margin: '0 0 16px' }}>Leaderboard</h3>
+            {leaderboard.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)' }}>No test results yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {leaderboard.filter(l => l.test_score !== null).map((entry, i) => (
+                  <div key={entry.registration_id} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '16px',
+                    background: i < 3 ? '#FEF3C7' : entry.test_passed ? '#E8F5E9' : '#FEE2E2',
+                    borderRadius: '12px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <span style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        background: i < 3 ? '#F59E0B' : 'var(--brand-navy)',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                      }}>
+                        {i + 1}
+                      </span>
+                      <div>
+                        <p style={{ margin: 0, fontWeight: 600 }}>{entry.name}</p>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          {entry.experience_years ? `${entry.experience_years} yrs exp` : 'Experience N/A'}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: entry.test_passed ? '#166534' : '#DC2626' }}>
+                          {Math.round(entry.test_score)}%
+                        </p>
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          {entry.test_passed ? 'PASSED' : 'FAILED'}
+                        </p>
+                      </div>
+                      {entry.status !== 'shortlisted' && entry.status !== 'rejected' && (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={() => handleShortlist(entry.registration_id)}
+                            style={{
+                              padding: '8px',
+                              borderRadius: '8px',
+                              background: '#E8F5E9',
+                              color: '#166534',
+                              border: 'none',
+                              cursor: 'pointer',
+                            }}
+                            title="Shortlist"
+                          >
+                            <UserCheck size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleReject(entry.registration_id)}
+                            style={{
+                              padding: '8px',
+                              borderRadius: '8px',
+                              background: '#FEE2E2',
+                              color: '#DC2626',
+                              border: 'none',
+                              cursor: 'pointer',
+                            }}
+                            title="Reject"
+                          >
+                            <UserX size={18} />
+                          </button>
+                        </div>
+                      )}
+                      {entry.status === 'shortlisted' && (
+                        <span className="chip chip-green">Shortlisted</span>
+                      )}
+                      {entry.status === 'rejected' && (
+                        <span className="chip chip-navy">Rejected</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </motion.div>
+    );
+  }
+
+  // Drive list view
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
+        <div>
+          <h1 style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Walk-in Drives</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>
+            Conduct walk-in recruitment drives with assessments
+          </p>
+        </div>
+        <button className="btn-sarvam" onClick={() => setShowCreateModal(true)}>
+          <Plus size={18} /> Create Drive
+        </button>
+      </div>
+
+      {/* Drives List */}
+      {drives.length === 0 ? (
+        <div className="sovereign-card" style={{ textAlign: 'center', padding: '60px' }}>
+          <Calendar size={48} style={{ color: 'var(--text-muted)', marginBottom: '16px' }} />
+          <h3 style={{ margin: '0 0 8px' }}>No Walk-in Drives</h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Create your first walk-in drive to get started.</p>
+          <button className="btn-sarvam" onClick={() => setShowCreateModal(true)}>
+            <Plus size={18} /> Create Drive
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {drives.map(drive => {
+            const job = jobs.find(j => j.id === drive.job_id);
+            return (
+              <div
+                key={drive.id}
+                className="sovereign-card"
+                style={{ cursor: 'pointer' }}
+                onClick={() => handleSelectDrive(drive)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 4px' }}>{drive.title}</h3>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                      {job?.title} • {new Date(drive.drive_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>{drive.registered_count || 0}</p>
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Registered</p>
+                    </div>
+                    <span style={{
+                      padding: '6px 16px',
+                      borderRadius: '20px',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      background: `${getStatusColor(drive.status)}20`,
+                      color: getStatusColor(drive.status),
+                      textTransform: 'capitalize',
+                    }}>
+                      {drive.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '16px', marginTop: '12px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  <span><Users size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Capacity: {drive.total_capacity || 'No limit'}</span>
+                  <span><ClipboardList size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Test: {drive.test_enabled ? 'Enabled' : 'Disabled'}</span>
+                  {drive.test_enabled && (
+                    <span><Clock size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> {drive.test_duration_minutes} min</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Create Drive Modal */}
+      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Create Walk-in Drive">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 500 }}>Job Position *</label>
+            <select
+              value={formData.job_id}
+              onChange={(e) => {
+                const job = jobs.find(j => j.id === parseInt(e.target.value));
+                setFormData({
+                  ...formData,
+                  job_id: e.target.value,
+                  title: job ? `${job.title} Walk-in Drive` : '',
+                });
+              }}
+              className="input-elegant"
+              style={{ width: '100%' }}
+            >
+              <option value="">Select a job...</option>
+              {jobs.filter(j => j.status === 'open').map(job => (
+                <option key={job.id} value={job.id}>{job.title} - {job.department}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 500 }}>Drive Title *</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="e.g., Backend Developer Walk-in - May 2026"
+              className="input-elegant"
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 500 }}>Drive Date *</label>
+            <input
+              type="datetime-local"
+              value={formData.drive_date}
+              onChange={(e) => setFormData({ ...formData, drive_date: e.target.value })}
+              className="input-elegant"
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 500 }}>Expected Capacity (optional)</label>
+            <input
+              type="number"
+              value={formData.total_capacity}
+              onChange={(e) => setFormData({ ...formData, total_capacity: e.target.value ? parseInt(e.target.value) : '' })}
+              placeholder="Leave empty for no limit"
+              className="input-elegant"
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <input
+              type="checkbox"
+              id="test_enabled"
+              checked={formData.test_enabled}
+              onChange={(e) => setFormData({ ...formData, test_enabled: e.target.checked })}
+              style={{ width: '18px', height: '18px' }}
+            />
+            <label htmlFor="test_enabled" style={{ fontSize: '0.9rem' }}>Enable Assessment Test</label>
+          </div>
+
+          {formData.test_enabled && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', padding: '16px', background: '#F9FAFB', borderRadius: '12px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
+                <input
+                  type="number"
+                  value={formData.questions_per_candidate}
+                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
+                  className="input-elegant"
+                  style={{ padding: '8px 12px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
+                <input
+                  type="number"
+                  value={formData.test_duration_minutes}
+                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
+                  className="input-elegant"
+                  style={{ padding: '8px 12px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
+                <input
+                  type="number"
+                  value={formData.passing_score_percent}
+                  onChange={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
+                  className="input-elegant"
+                  style={{ padding: '8px 12px' }}
+                />
+              </div>
+            </div>
+          )}
+
+          <button className="btn-sarvam" onClick={handleCreateDrive} style={{ marginTop: '8px' }}>
+            Create Drive
+          </button>
+        </div>
+      </Modal>
     </motion.div>
   );
 }
