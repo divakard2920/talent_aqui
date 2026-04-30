@@ -3588,7 +3588,7 @@ function CandidateTestPortal({ driveId }) {
     setSubmitting(true);
 
     try {
-      const res = await walkinApi.submitTest(driveId, candidate.registration_id, { answers });
+      const res = await walkinApi.submitTest(driveId, candidate.registration_id, answers);
       setResult({
         score: res.data.score_percent,
         passed: res.data.passed,
