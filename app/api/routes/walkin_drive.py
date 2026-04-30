@@ -501,6 +501,9 @@ async def start_test(
     if not drive:
         raise HTTPException(status_code=404, detail="Drive not found")
 
+    if drive.status != DriveStatus.ONGOING.value:
+        raise HTTPException(status_code=400, detail="Drive is not active. Test can only be taken when drive is ongoing.")
+
     if not drive.test_enabled:
         raise HTTPException(status_code=400, detail="Test is not enabled for this drive")
 
@@ -555,6 +558,67 @@ async def start_test(
         duration_minutes=drive.test_duration_minutes,
         started_at=registration.test_started_at,
     )
+
+
+@router.get("/{drive_id}/registrations/{registration_id}/resume-test")
+async def resume_test(
+    drive_id: int,
+    registration_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Resume a test that was started but not completed (e.g., candidate closed tab)."""
+    result = await db.execute(select(WalkInDrive).where(WalkInDrive.id == drive_id))
+    drive = result.scalar_one_or_none()
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+
+    result = await db.execute(
+        select(DriveRegistration).where(
+            DriveRegistration.id == registration_id,
+            DriveRegistration.drive_id == drive_id,
+        )
+    )
+    registration = result.scalar_one_or_none()
+    if not registration:
+        raise HTTPException(status_code=404, detail="Registration not found")
+
+    if not registration.test_started_at:
+        raise HTTPException(status_code=400, detail="Test not started")
+
+    if registration.test_completed_at:
+        raise HTTPException(status_code=400, detail="Test already completed")
+
+    # Calculate remaining time
+    elapsed = (datetime.utcnow() - registration.test_started_at).total_seconds()
+    total_seconds = drive.test_duration_minutes * 60
+    remaining_seconds = max(0, int(total_seconds - elapsed))
+
+    if remaining_seconds <= 0:
+        raise HTTPException(status_code=400, detail="Test time has expired")
+
+    # Get assigned questions
+    question_map = {q["id"]: q for q in drive.question_bank}
+    assigned_ids = registration.assigned_questions or []
+
+    test_questions = []
+    for q_id in assigned_ids:
+        q = question_map.get(q_id)
+        if q:
+            test_questions.append({
+                "id": q["id"],
+                "type": q["type"],
+                "skill": q.get("skill", ""),
+                "question": q["question"],
+                "options": [{"label": o["label"], "text": o["text"]} for o in q.get("options", [])] if q.get("options") else None,
+                "points": q.get("points", 5),
+            })
+
+    return {
+        "registration_id": registration_id,
+        "questions": test_questions,
+        "remaining_seconds": remaining_seconds,
+        "answers": registration.answers or {},  # Return previously saved answers
+    }
 
 
 @router.post("/{drive_id}/registrations/{registration_id}/submit-test", response_model=TestResultResponse)
@@ -749,17 +813,27 @@ async def lookup_candidate(
     if not registration.checked_in_at:
         raise HTTPException(status_code=400, detail="Not checked in yet")
 
+    # Calculate remaining time if test started
+    remaining_seconds = None
+    if registration.test_started_at and not registration.test_completed_at:
+        elapsed = (datetime.utcnow() - registration.test_started_at).total_seconds()
+        total_seconds = drive.test_duration_minutes * 60
+        remaining_seconds = max(0, int(total_seconds - elapsed))
+
     return {
         "registration_id": registration.id,
         "name": registration.name,
         "token_number": registration.token_number,
         "status": registration.status,
         "test_started": registration.test_started_at is not None,
+        "test_started_at": registration.test_started_at.isoformat() if registration.test_started_at else None,
         "test_completed": registration.test_completed_at is not None,
         "test_score": registration.test_score,
         "test_passed": registration.test_passed,
         "test_enabled": drive.test_enabled,
         "test_duration_minutes": drive.test_duration_minutes,
+        "remaining_seconds": remaining_seconds,
+        "drive_status": drive.status,
     }
 
 

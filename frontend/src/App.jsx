@@ -2048,6 +2048,7 @@ function WalkInsView({ showToast }) {
   });
   const [showEditModal, setShowEditModal] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -2742,7 +2743,7 @@ function WalkInsView({ showToast }) {
                           {reg.test_score !== null ? `${Math.round(reg.test_score)}%` : reg.status.replace('_', ' ')}
                         </span>
                         <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          {new Date(reg.checked_in_at).toLocaleTimeString()}
+                          {new Date(reg.checked_in_at + 'Z').toLocaleTimeString()}
                         </p>
                       </div>
                     </div>
@@ -2839,6 +2840,23 @@ function WalkInsView({ showToast }) {
                       {entry.status === 'rejected' && (
                         <span className="chip chip-navy">Rejected</span>
                       )}
+                      <button
+                        onClick={() => {
+                          const reg = registrations.find(r => r.id === entry.registration_id);
+                          setSelectedCandidate({ ...entry, ...reg });
+                        }}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '8px',
+                          background: '#F3F4F6',
+                          color: 'var(--text-secondary)',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                        title="View Details"
+                      >
+                        <Eye size={18} />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -2846,6 +2864,139 @@ function WalkInsView({ showToast }) {
             )}
           </div>
         )}
+      {/* Candidate Detail Modal */}
+      <Modal isOpen={!!selectedCandidate} onClose={() => setSelectedCandidate(null)} title="Candidate Details">
+        {selectedCandidate && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Basic Info */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
+              <div style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                background: selectedCandidate.status === 'shortlisted' ? '#10B981' : selectedCandidate.status === 'rejected' ? '#EF4444' : 'var(--brand-navy)',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.5rem',
+                fontWeight: 700,
+              }}>
+                {selectedCandidate.token_number || '#'}
+              </div>
+              <div>
+                <h3 style={{ margin: 0 }}>{selectedCandidate.name}</h3>
+                <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                  Token #{selectedCandidate.token_number}
+                </p>
+                {selectedCandidate.status && (
+                  <span style={{
+                    display: 'inline-block',
+                    marginTop: '8px',
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    background: selectedCandidate.status === 'shortlisted' ? '#DCFCE7' : selectedCandidate.status === 'rejected' ? '#FEE2E2' : '#F3F4F6',
+                    color: selectedCandidate.status === 'shortlisted' ? '#166534' : selectedCandidate.status === 'rejected' ? '#991B1B' : '#4B5563',
+                  }}>
+                    {selectedCandidate.status.replace('_', ' ')}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Contact Info */}
+            <div style={{ background: '#F9FAFB', borderRadius: '12px', padding: '16px' }}>
+              <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Contact Information</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Email</p>
+                  <p style={{ margin: '2px 0 0', fontWeight: 500 }}>{selectedCandidate.email}</p>
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Phone</p>
+                  <p style={{ margin: '2px 0 0', fontWeight: 500 }}>{selectedCandidate.phone}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Experience Info */}
+            <div style={{ background: '#F9FAFB', borderRadius: '12px', padding: '16px' }}>
+              <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Professional Info</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Experience</p>
+                  <p style={{ margin: '2px 0 0', fontWeight: 500 }}>{selectedCandidate.experience_years ? `${selectedCandidate.experience_years} years` : 'Fresher'}</p>
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Current Role</p>
+                  <p style={{ margin: '2px 0 0', fontWeight: 500 }}>{selectedCandidate.current_role || 'N/A'}</p>
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Current Company</p>
+                  <p style={{ margin: '2px 0 0', fontWeight: 500 }}>{selectedCandidate.current_company || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Test Results */}
+            {selectedCandidate.test_score !== null && (
+              <div style={{ background: selectedCandidate.test_passed ? '#DCFCE7' : '#FEE2E2', borderRadius: '12px', padding: '16px' }}>
+                <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: selectedCandidate.test_passed ? '#166534' : '#991B1B' }}>Test Results</h4>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: 700, color: selectedCandidate.test_passed ? '#166534' : '#991B1B' }}>
+                      {Math.round(selectedCandidate.test_score)}%
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: selectedCandidate.test_passed ? '#166534' : '#991B1B' }}>
+                      {selectedCandidate.test_passed ? 'PASSED' : 'FAILED'}
+                    </p>
+                  </div>
+                  {selectedCandidate.test_score_breakdown && (
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.8rem' }}>
+                        MCQ: {selectedCandidate.test_score_breakdown.mcq?.earned || 0} / {selectedCandidate.test_score_breakdown.mcq?.total || 0}
+                      </p>
+                      <p style={{ margin: 0, fontSize: '0.8rem' }}>
+                        Short Answer: {selectedCandidate.test_score_breakdown.short_answer?.earned || 0} / {selectedCandidate.test_score_breakdown.short_answer?.total || 0}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            {selectedCandidate.status !== 'shortlisted' && selectedCandidate.status !== 'rejected' && (
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                <button
+                  className="btn-sarvam"
+                  onClick={() => {
+                    handleShortlist(selectedCandidate.registration_id || selectedCandidate.id);
+                    setSelectedCandidate(null);
+                  }}
+                  style={{ flex: 1 }}
+                >
+                  <UserCheck size={18} /> Shortlist
+                </button>
+                <button
+                  className="btn-pill"
+                  onClick={() => {
+                    handleReject(selectedCandidate.registration_id || selectedCandidate.id);
+                    setSelectedCandidate(null);
+                  }}
+                  style={{ flex: 1, color: '#DC2626', borderColor: '#DC2626' }}
+                >
+                  <UserX size={18} /> Reject
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
       {/* Confirm Dialog */}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
@@ -3553,8 +3704,15 @@ function CandidateTestPortal({ driveId }) {
         setStage('result');
       } else if (!res.data.test_enabled) {
         setError('Test is not enabled for this drive');
+      } else if (res.data.drive_status !== 'ongoing') {
+        setError('Test is not available yet. Please wait for the drive to start.');
+      } else if (res.data.test_started && res.data.remaining_seconds > 0) {
+        // Test was started but not completed - resume it
+        setStage('resuming');
+      } else if (res.data.test_started && res.data.remaining_seconds <= 0) {
+        setError('Your test time has expired. Please contact the HR desk.');
       } else {
-        // Ready to start or continue test
+        // Ready to start new test
         setStage('ready');
       }
     } catch (err) {
@@ -3575,6 +3733,23 @@ function CandidateTestPortal({ driveId }) {
       setStage('test');
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not start test');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResumeTest = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await walkinApi.resumeTest(driveId, candidate.registration_id);
+      setQuestions(res.data.questions);
+      setTimeLeft(res.data.remaining_seconds);
+      setAnswers(res.data.answers || {});
+      setStage('test');
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not resume test');
     } finally {
       setLoading(false);
     }
@@ -3767,6 +3942,72 @@ function CandidateTestPortal({ driveId }) {
           </div>
         )}
 
+        {/* Resuming Stage */}
+        {stage === 'resuming' && candidate && (
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            textAlign: 'center',
+          }}>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: '#F59E0B',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '2rem',
+              fontWeight: 700,
+              margin: '0 auto 20px',
+            }}>
+              {candidate.token_number}
+            </div>
+
+            <h2 style={{ margin: '0 0 8px' }}>{candidate.name}</h2>
+            <p style={{ color: '#6B7280', margin: '0 0 24px' }}>Token #{candidate.token_number}</p>
+
+            <div style={{
+              background: '#FEF3C7',
+              border: '1px solid #F59E0B',
+              borderRadius: '12px',
+              padding: '20px',
+              marginBottom: '24px',
+            }}>
+              <h3 style={{ margin: '0 0 12px', fontSize: '1rem', color: '#92400E' }}>Resume Your Test</h3>
+              <p style={{ margin: 0, color: '#92400E' }}>
+                You have an incomplete test. Time remaining: <strong>{Math.floor(candidate.remaining_seconds / 60)}:{(candidate.remaining_seconds % 60).toString().padStart(2, '0')}</strong>
+              </p>
+            </div>
+
+            <button
+              onClick={handleResumeTest}
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '16px',
+                background: '#F59E0B',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '1.1rem',
+                fontWeight: 600,
+                cursor: loading ? 'wait' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+              }}
+            >
+              {loading ? <Loader2 size={20} className="spin" /> : <Play size={20} />}
+              Resume Test
+            </button>
+          </div>
+        )}
+
         {/* Test Stage */}
         {stage === 'test' && (
           <div>
@@ -3945,18 +4186,80 @@ function CandidateTestPortal({ driveId }) {
               {result.earned && `${result.earned} / ${result.total} points`}
             </p>
 
-            <div style={{
-              marginTop: '32px',
-              padding: '20px',
-              background: '#F3F4F6',
-              borderRadius: '12px',
-            }}>
-              <p style={{ margin: 0, color: '#4B5563' }}>
-                {result.passed
-                  ? 'Please wait for further instructions from the HR team.'
-                  : 'Please check with the HR desk for next steps.'}
-              </p>
-            </div>
+            {/* Status-specific next steps */}
+            {candidate?.status === 'shortlisted' && (
+              <div style={{
+                marginTop: '32px',
+                padding: '20px',
+                background: '#DCFCE7',
+                border: '1px solid #10B981',
+                borderRadius: '12px',
+              }}>
+                <h3 style={{ margin: '0 0 12px', color: '#166534' }}>You've been Shortlisted!</h3>
+                <p style={{ margin: 0, color: '#166534' }}>
+                  Congratulations! Please proceed to the Interview Room for the next round.
+                  Keep your token number handy.
+                </p>
+              </div>
+            )}
+
+            {candidate?.status === 'rejected' && (
+              <div style={{
+                marginTop: '32px',
+                padding: '20px',
+                background: '#FEE2E2',
+                border: '1px solid #EF4444',
+                borderRadius: '12px',
+              }}>
+                <p style={{ margin: 0, color: '#991B1B' }}>
+                  Thank you for participating. Unfortunately, you have not been selected to proceed.
+                  We wish you the best in your future endeavors.
+                </p>
+              </div>
+            )}
+
+            {candidate?.status !== 'shortlisted' && candidate?.status !== 'rejected' && (
+              <div style={{
+                marginTop: '32px',
+                padding: '20px',
+                background: '#F3F4F6',
+                borderRadius: '12px',
+              }}>
+                <p style={{ margin: 0, color: '#4B5563' }}>
+                  {result.passed
+                    ? 'Please wait for the HR team to review your results. You will be notified of next steps shortly.'
+                    : 'Please check with the HR desk for next steps.'}
+                </p>
+              </div>
+            )}
+
+            {/* Refresh status button */}
+            <button
+              onClick={async () => {
+                try {
+                  const res = await walkinApi.lookupCandidate(driveId, { phone });
+                  setCandidate(res.data);
+                } catch (err) {
+                  console.error('Failed to refresh status');
+                }
+              }}
+              style={{
+                marginTop: '16px',
+                padding: '12px 24px',
+                background: 'transparent',
+                border: '1px solid #D1D5DB',
+                borderRadius: '8px',
+                color: '#6B7280',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                margin: '16px auto 0',
+              }}
+            >
+              <RefreshCw size={16} /> Check Status
+            </button>
           </div>
         )}
       </div>

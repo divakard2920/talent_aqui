@@ -107,6 +107,8 @@ export const walkinApi = {
   // Test
   startTest: (driveId, registrationId) =>
     api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/start-test`),
+  resumeTest: (driveId, registrationId) =>
+    api.get(`/walkin-drives/${driveId}/registrations/${registrationId}/resume-test`),
   submitTest: (driveId, registrationId, answers) =>
     api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/submit-test`, { answers }),
 
