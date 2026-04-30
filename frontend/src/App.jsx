@@ -2047,6 +2047,7 @@ function WalkInsView({ showToast }) {
     passing_score_percent: 60,
   });
   const [showEditModal, setShowEditModal] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
   useEffect(() => {
     fetchData();
@@ -2205,21 +2206,25 @@ function WalkInsView({ showToast }) {
     }
   };
 
-  const handleDeleteDrive = async () => {
+  const handleDeleteDrive = () => {
     if (!selectedDrive) return;
 
-    if (!window.confirm(`Are you sure you want to delete "${selectedDrive.title}"? This will also delete all registrations.`)) {
-      return;
-    }
-
-    try {
-      await walkinApi.delete(selectedDrive.id);
-      setDrives(prev => prev.filter(d => d.id !== selectedDrive.id));
-      setSelectedDrive(null);
-      showToast('Drive deleted successfully');
-    } catch (err) {
-      showToast(err.response?.data?.detail || 'Failed to delete drive', 'error');
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Walk-in Drive',
+      message: `Are you sure you want to delete "${selectedDrive.title}"? This will also delete all registrations.`,
+      onConfirm: async () => {
+        try {
+          await walkinApi.delete(selectedDrive.id);
+          setDrives(prev => prev.filter(d => d.id !== selectedDrive.id));
+          setSelectedDrive(null);
+          showToast('Drive deleted successfully');
+        } catch (err) {
+          showToast(err.response?.data?.detail || 'Failed to delete drive', 'error');
+        }
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
   const handleWalkinRegister = async () => {
@@ -2841,6 +2846,16 @@ function WalkInsView({ showToast }) {
             )}
           </div>
         )}
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        type="danger"
+      />
+
       {/* Edit Drive Modal (for detail view) */}
       <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Walk-in Drive">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
