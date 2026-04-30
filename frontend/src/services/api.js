@@ -98,6 +98,9 @@ export const walkinApi = {
   // Check-in
   checkIn: (driveId, data) => api.post(`/walkin-drives/${driveId}/checkin`, data),
 
+  // Walk-in registration (front desk - register + check-in in one step)
+  walkinRegister: (driveId, data) => api.post(`/walkin-drives/${driveId}/walkin`, data),
+
   // Test
   startTest: (driveId, registrationId) =>
     api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/start-test`),

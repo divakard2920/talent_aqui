@@ -2015,8 +2015,16 @@ function WalkInsView({ showToast }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [stats, setStats] = useState(null);
   const [generatingQuestions, setGeneratingQuestions] = useState(false);
-  const [checkInCode, setCheckInCode] = useState('');
-  const [checkingIn, setCheckingIn] = useState(false);
+  const [walkinRegistering, setWalkinRegistering] = useState(false);
+  const [lastToken, setLastToken] = useState(null);
+  const [walkinForm, setWalkinForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    experience_years: '',
+    current_company: '',
+    current_role: '',
+  });
 
   // Create form state
   const [formData, setFormData] = useState({
@@ -2142,16 +2150,34 @@ function WalkInsView({ showToast }) {
     }
   };
 
-  const handleCheckIn = async () => {
-    if (!checkInCode.trim() || !selectedDrive) return;
-    setCheckingIn(true);
+  const handleWalkinRegister = async () => {
+    if (!walkinForm.name || !walkinForm.email || !walkinForm.phone || !selectedDrive) {
+      showToast('Name, email, and phone are required', 'error');
+      return;
+    }
+    setWalkinRegistering(true);
 
     try {
-      const res = await walkinApi.checkIn(selectedDrive.id, {
-        registration_code: checkInCode.trim().toUpperCase(),
+      const payload = {
+        ...walkinForm,
+        experience_years: walkinForm.experience_years ? parseFloat(walkinForm.experience_years) : null,
+      };
+      const res = await walkinApi.walkinRegister(selectedDrive.id, payload);
+      setLastToken({
+        token_number: res.data.token_number,
+        name: res.data.registration.name,
+        message: res.data.message,
       });
-      showToast(`Checked in: ${res.data.registration.name} - Token #${res.data.token_number}`);
-      setCheckInCode('');
+
+      // Reset form
+      setWalkinForm({
+        name: '',
+        email: '',
+        phone: '',
+        experience_years: '',
+        current_company: '',
+        current_role: '',
+      });
 
       // Refresh registrations
       const regsRes = await walkinApi.getRegistrations(selectedDrive.id);
@@ -2160,9 +2186,9 @@ function WalkInsView({ showToast }) {
       const statsRes = await walkinApi.getStats(selectedDrive.id);
       setStats(statsRes.data);
     } catch (err) {
-      showToast(err.response?.data?.detail || 'Check-in failed', 'error');
+      showToast(err.response?.data?.detail || 'Registration failed', 'error');
     } finally {
-      setCheckingIn(false);
+      setWalkinRegistering(false);
     }
   };
 
@@ -2324,7 +2350,7 @@ function WalkInsView({ showToast }) {
               onClick={() => setDriveView(tab)}
               style={{ textTransform: 'capitalize' }}
             >
-              {tab === 'checkin' ? 'Check-in' : tab}
+              {tab === 'checkin' ? 'Front Desk' : tab}
             </button>
           ))}
         </div>
@@ -2409,64 +2435,176 @@ function WalkInsView({ showToast }) {
         )}
 
         {driveView === 'checkin' && (
-          <div className="sovereign-card">
-            <h3 style={{ margin: '0 0 16px' }}>Check-in Desk</h3>
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
-              <input
-                type="text"
-                value={checkInCode}
-                onChange={(e) => setCheckInCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === 'Enter' && handleCheckIn()}
-                placeholder="Enter registration code..."
-                className="input-elegant"
-                style={{ flex: 1 }}
-              />
-              <button className="btn-sarvam" onClick={handleCheckIn} disabled={checkingIn || !checkInCode.trim()}>
-                {checkingIn ? <Loader2 size={18} className="spin" /> : <UserCheck size={18} />}
-                Check In
-              </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            {/* Registration Form */}
+            <div className="sovereign-card">
+              <h3 style={{ margin: '0 0 16px' }}>Front Desk - Walk-in Registration</h3>
+
+              {lastToken && (
+                <div style={{
+                  background: '#E8F5E9',
+                  border: '2px solid #4CAF50',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  marginBottom: '20px',
+                  textAlign: 'center',
+                }}>
+                  <p style={{ margin: '0 0 8px', color: '#4CAF50', fontWeight: 600 }}>Registration Successful!</p>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.9rem' }}>{lastToken.name}</p>
+                  <div style={{
+                    fontSize: '3rem',
+                    fontWeight: 700,
+                    color: 'var(--brand-navy)',
+                  }}>
+                    Token #{lastToken.token_number}
+                  </div>
+                  <button
+                    onClick={() => setLastToken(null)}
+                    style={{ marginTop: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Register Next Candidate
+                  </button>
+                </div>
+              )}
+
+              {!lastToken && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Full Name *</label>
+                    <input
+                      type="text"
+                      value={walkinForm.name}
+                      onChange={(e) => setWalkinForm({ ...walkinForm, name: e.target.value })}
+                      className="input-elegant"
+                      placeholder="Enter candidate name"
+                      autoFocus
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Email *</label>
+                      <input
+                        type="email"
+                        value={walkinForm.email}
+                        onChange={(e) => setWalkinForm({ ...walkinForm, email: e.target.value })}
+                        className="input-elegant"
+                        placeholder="email@example.com"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Phone *</label>
+                      <input
+                        type="tel"
+                        value={walkinForm.phone}
+                        onChange={(e) => setWalkinForm({ ...walkinForm, phone: e.target.value })}
+                        className="input-elegant"
+                        placeholder="9876543210"
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Experience (years)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={walkinForm.experience_years}
+                        onChange={(e) => setWalkinForm({ ...walkinForm, experience_years: e.target.value })}
+                        className="input-elegant"
+                        placeholder="e.g., 2.5"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Current Role</label>
+                      <input
+                        type="text"
+                        value={walkinForm.current_role}
+                        onChange={(e) => setWalkinForm({ ...walkinForm, current_role: e.target.value })}
+                        className="input-elegant"
+                        placeholder="e.g., Software Engineer"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Current Company</label>
+                    <input
+                      type="text"
+                      value={walkinForm.current_company}
+                      onChange={(e) => setWalkinForm({ ...walkinForm, current_company: e.target.value })}
+                      className="input-elegant"
+                      placeholder="e.g., Acme Corp"
+                    />
+                  </div>
+                  <button
+                    className="btn-sarvam"
+                    onClick={handleWalkinRegister}
+                    disabled={walkinRegistering || !walkinForm.name || !walkinForm.email || !walkinForm.phone}
+                    style={{ marginTop: '8px', padding: '14px' }}
+                  >
+                    {walkinRegistering ? <Loader2 size={18} className="spin" /> : <UserCheck size={18} />}
+                    Register & Get Token
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Recent check-ins */}
-            <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Recent Check-ins</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {registrations
-                .filter(r => r.checked_in_at)
-                .sort((a, b) => new Date(b.checked_in_at) - new Date(a.checked_in_at))
-                .slice(0, 10)
-                .map(reg => (
-                  <div key={reg.id} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '12px 16px',
-                    background: '#E8F5E9',
-                    borderRadius: '8px',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '50%',
-                        background: 'var(--brand-navy)',
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 700,
-                      }}>
-                        {reg.token_number}
-                      </span>
-                      <div>
-                        <p style={{ margin: 0, fontWeight: 600 }}>{reg.name}</p>
-                        <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>{reg.registration_code}</p>
+            {/* Recent Registrations */}
+            <div className="sovereign-card">
+              <h3 style={{ margin: '0 0 16px' }}>Today's Registrations ({registrations.filter(r => r.checked_in_at).length})</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '500px', overflowY: 'auto' }}>
+                {registrations
+                  .filter(r => r.checked_in_at)
+                  .sort((a, b) => new Date(b.checked_in_at) - new Date(a.checked_in_at))
+                  .map(reg => (
+                    <div key={reg.id} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '12px 16px',
+                      background: reg.status === 'shortlisted' ? '#E8F5E9' : reg.status === 'rejected' ? '#FEE2E2' : '#F8F9FA',
+                      borderRadius: '8px',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          background: 'var(--brand-navy)',
+                          color: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 700,
+                        }}>
+                          {reg.token_number}
+                        </span>
+                        <div>
+                          <p style={{ margin: 0, fontWeight: 600 }}>{reg.name}</p>
+                          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            {reg.experience_years ? `${reg.experience_years} yrs` : 'Fresher'} | {reg.phone}
+                          </p>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{
+                          fontSize: '0.75rem',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          background: reg.test_passed === true ? '#4CAF50' : reg.test_passed === false ? '#EF4444' : '#94A3B8',
+                          color: 'white',
+                        }}>
+                          {reg.test_score !== null ? `${Math.round(reg.test_score)}%` : reg.status.replace('_', ' ')}
+                        </span>
+                        <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          {new Date(reg.checked_in_at).toLocaleTimeString()}
+                        </p>
                       </div>
                     </div>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      {new Date(reg.checked_in_at).toLocaleTimeString()}
-                    </span>
-                  </div>
-                ))}
+                  ))}
+                {registrations.filter(r => r.checked_in_at).length === 0 && (
+                  <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px' }}>No registrations yet</p>
+                )}
+              </div>
             </div>
           </div>
         )}

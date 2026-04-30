@@ -397,6 +397,91 @@ async def check_in_candidate(
     )
 
 
+# --- Walk-in Registration (Front Desk) ---
+
+@router.post("/{drive_id}/walkin", response_model=CheckInResponse)
+async def walkin_register(
+    drive_id: int,
+    request: RegistrationCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Register a walk-in candidate at the front desk.
+    Combines registration + check-in + token assignment in one step.
+    """
+    result = await db.execute(select(WalkInDrive).where(WalkInDrive.id == drive_id))
+    drive = result.scalar_one_or_none()
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+
+    # Check if already registered by email or phone
+    result = await db.execute(
+        select(DriveRegistration).where(
+            DriveRegistration.drive_id == drive_id,
+            (DriveRegistration.email == request.email) | (DriveRegistration.phone == request.phone),
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        if existing.checked_in_at:
+            raise HTTPException(status_code=400, detail=f"Already checked in with token #{existing.token_number}")
+        # Already registered but not checked in - check them in now
+        result = await db.execute(
+            select(func.max(DriveRegistration.token_number)).where(
+                DriveRegistration.drive_id == drive_id
+            )
+        )
+        max_token = result.scalar() or 0
+        token_number = max_token + 1
+
+        existing.token_number = token_number
+        existing.checked_in_at = datetime.utcnow()
+        existing.status = RegistrationStatus.CHECKED_IN.value
+
+        await db.commit()
+        await db.refresh(existing)
+
+        return CheckInResponse(
+            registration=existing,
+            token_number=token_number,
+            message=f"Welcome back! Token number: {token_number}",
+        )
+
+    # Assign token number
+    result = await db.execute(
+        select(func.max(DriveRegistration.token_number)).where(
+            DriveRegistration.drive_id == drive_id
+        )
+    )
+    max_token = result.scalar() or 0
+    token_number = max_token + 1
+
+    # Create registration with immediate check-in
+    registration = DriveRegistration(
+        drive_id=drive_id,
+        name=request.name,
+        email=request.email,
+        phone=request.phone,
+        experience_years=request.experience_years,
+        current_company=request.current_company,
+        current_role=request.current_role,
+        registration_code=generate_registration_code(),
+        token_number=token_number,
+        checked_in_at=datetime.utcnow(),
+        status=RegistrationStatus.CHECKED_IN.value,
+    )
+
+    db.add(registration)
+    await db.commit()
+    await db.refresh(registration)
+
+    return CheckInResponse(
+        registration=registration,
+        token_number=token_number,
+        message=f"Registered successfully! Token number: {token_number}",
+    )
+
+
 # --- Test Taking ---
 
 @router.post("/{drive_id}/registrations/{registration_id}/start-test", response_model=StartTestResponse)
