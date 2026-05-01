@@ -26,6 +26,7 @@ import {
   X,
   Check,
   ChevronDown,
+  ChevronRight,
   Phone,
   Calendar,
   ClipboardList,
@@ -2184,6 +2185,7 @@ function WalkInsView({ showToast }) {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [driveInterviews, setDriveInterviews] = useState([]);
   const [loadingInterviews, setLoadingInterviews] = useState(false);
+  const [expandedDriveInterview, setExpandedDriveInterview] = useState(null);
   const [answersCandidate, setAnswersCandidate] = useState(null);
 
   useEffect(() => {
@@ -3142,76 +3144,126 @@ function WalkInsView({ showToast }) {
                 {driveInterviews.map((interview, idx) => {
                   const evaluation = interview.evaluation || {};
                   const candidate = interview.candidate || {};
+                  const isExpanded = expandedDriveInterview === interview.id;
+                  const hasDetails = interview.status === 'completed' && evaluation;
                   const getScoreColor = (score) => score >= 70 ? '#166534' : score >= 50 ? '#D97706' : '#DC2626';
                   return (
-                    <div
-                      key={interview.id}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '2fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 1.2fr',
-                        gap: '8px',
-                        padding: '12px 16px',
-                        alignItems: 'center',
-                        background: idx % 2 === 0 ? 'white' : '#FAFAFA',
-                        borderBottom: idx < driveInterviews.length - 1 ? '1px solid var(--border-light)' : 'none',
-                      }}
-                    >
-                      {/* Candidate */}
-                      <div>
-                        <p style={{ margin: 0, fontWeight: 500, fontSize: '0.9rem' }}>{candidate.name || 'Unknown'}</p>
-                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{candidate.email}</p>
-                      </div>
-                      {/* Status */}
-                      <div>
-                        <span style={{
-                          padding: '3px 8px',
-                          borderRadius: '10px',
-                          fontSize: '0.7rem',
-                          fontWeight: 600,
-                          textTransform: 'uppercase',
-                          background: interview.status === 'completed' ? '#DCFCE7' : interview.status === 'in_progress' ? '#FEF3C7' : '#E0E7FF',
-                          color: interview.status === 'completed' ? '#166534' : interview.status === 'in_progress' ? '#92400E' : '#4338CA',
-                        }}>
-                          {interview.status.replace('_', ' ')}
-                        </span>
-                        {interview.duration_minutes && (
-                          <span style={{ marginLeft: '6px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                            {interview.duration_minutes}m
-                          </span>
-                        )}
-                      </div>
-                      {/* Scores */}
-                      <div style={{ textAlign: 'center', fontWeight: 600, fontSize: '0.95rem', color: evaluation.overall_score != null ? getScoreColor(evaluation.overall_score) : 'var(--text-muted)' }}>
-                        {evaluation.overall_score != null ? Math.round(evaluation.overall_score) : '-'}
-                      </div>
-                      <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                        {evaluation.communication_score != null ? Math.round(evaluation.communication_score) : '-'}
-                      </div>
-                      <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                        {evaluation.technical_score != null ? Math.round(evaluation.technical_score) : '-'}
-                      </div>
-                      <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                        {evaluation.culture_fit_score != null ? Math.round(evaluation.culture_fit_score) : '-'}
-                      </div>
-                      {/* Recommendation */}
-                      <div>
-                        {evaluation.recommendation ? (
+                    <div key={interview.id}>
+                      {/* Main Row */}
+                      <div
+                        onClick={() => hasDetails && setExpandedDriveInterview(isExpanded ? null : interview.id)}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '2fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 1.2fr',
+                          gap: '8px',
+                          padding: '12px 16px',
+                          alignItems: 'center',
+                          background: isExpanded ? '#F0F9FF' : idx % 2 === 0 ? 'white' : '#FAFAFA',
+                          borderBottom: '1px solid var(--border-light)',
+                          cursor: hasDetails ? 'pointer' : 'default',
+                          transition: 'background 0.15s',
+                        }}
+                      >
+                        {/* Candidate */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {hasDetails && (
+                            <ChevronRight size={16} style={{ color: 'var(--text-muted)', transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+                          )}
+                          <div>
+                            <p style={{ margin: 0, fontWeight: 500, fontSize: '0.9rem' }}>{candidate.name || 'Unknown'}</p>
+                            <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{candidate.email}</p>
+                          </div>
+                        </div>
+                        {/* Status */}
+                        <div>
                           <span style={{
                             padding: '3px 8px',
                             borderRadius: '10px',
                             fontSize: '0.7rem',
                             fontWeight: 600,
-                            background: evaluation.recommendation === 'proceed_to_l2' ? '#DCFCE7' : evaluation.recommendation === 'reject' ? '#FEE2E2' : '#FEF3C7',
-                            color: evaluation.recommendation === 'proceed_to_l2' ? '#166534' : evaluation.recommendation === 'reject' ? '#991B1B' : '#92400E',
+                            textTransform: 'uppercase',
+                            background: interview.status === 'completed' ? '#DCFCE7' : interview.status === 'in_progress' ? '#FEF3C7' : '#E0E7FF',
+                            color: interview.status === 'completed' ? '#166534' : interview.status === 'in_progress' ? '#92400E' : '#4338CA',
                           }}>
-                            {evaluation.recommendation === 'proceed_to_l2' ? 'Proceed L2' : evaluation.recommendation === 'reject' ? 'Reject' : 'Hold'}
+                            {interview.status.replace('_', ' ')}
                           </span>
-                        ) : (
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            {interview.status === 'in_progress' ? 'In progress...' : 'Pending'}
-                          </span>
-                        )}
+                          {interview.duration_minutes && (
+                            <span style={{ marginLeft: '6px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                              {interview.duration_minutes}m
+                            </span>
+                          )}
+                        </div>
+                        {/* Scores */}
+                        <div style={{ textAlign: 'center', fontWeight: 600, fontSize: '0.95rem', color: evaluation.overall_score != null ? getScoreColor(evaluation.overall_score) : 'var(--text-muted)' }}>
+                          {evaluation.overall_score != null ? Math.round(evaluation.overall_score) : '-'}
+                        </div>
+                        <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          {evaluation.communication_score != null ? Math.round(evaluation.communication_score) : '-'}
+                        </div>
+                        <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          {evaluation.technical_score != null ? Math.round(evaluation.technical_score) : '-'}
+                        </div>
+                        <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          {evaluation.culture_fit_score != null ? Math.round(evaluation.culture_fit_score) : '-'}
+                        </div>
+                        {/* Recommendation */}
+                        <div>
+                          {evaluation.recommendation ? (
+                            <span style={{
+                              padding: '3px 8px',
+                              borderRadius: '10px',
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                              background: evaluation.recommendation === 'proceed_to_l2' ? '#DCFCE7' : evaluation.recommendation === 'reject' ? '#FEE2E2' : '#FEF3C7',
+                              color: evaluation.recommendation === 'proceed_to_l2' ? '#166534' : evaluation.recommendation === 'reject' ? '#991B1B' : '#92400E',
+                            }}>
+                              {evaluation.recommendation === 'proceed_to_l2' ? 'Proceed L2' : evaluation.recommendation === 'reject' ? 'Reject' : 'Hold'}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              {interview.status === 'in_progress' ? 'In progress...' : 'Pending'}
+                            </span>
+                          )}
+                        </div>
                       </div>
+                      {/* Expanded Details */}
+                      {isExpanded && hasDetails && (
+                        <div style={{ padding: '16px 16px 16px 40px', background: '#F8FAFC', borderBottom: '1px solid var(--border-light)' }}>
+                          {/* Summary */}
+                          {evaluation.summary && (
+                            <div style={{ marginBottom: '12px' }}>
+                              <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Summary</p>
+                              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{evaluation.summary}</p>
+                            </div>
+                          )}
+                          {/* Strengths & Concerns */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                            {evaluation.strengths?.length > 0 && (
+                              <div>
+                                <p style={{ margin: '0 0 6px', fontSize: '0.75rem', fontWeight: 600, color: '#166534', textTransform: 'uppercase' }}>Strengths</p>
+                                <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                  {evaluation.strengths.slice(0, 3).map((s, i) => <li key={i} style={{ marginBottom: '2px' }}>{s}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                            {evaluation.concerns?.length > 0 && (
+                              <div>
+                                <p style={{ margin: '0 0 6px', fontSize: '0.75rem', fontWeight: 600, color: '#DC2626', textTransform: 'uppercase' }}>Concerns</p>
+                                <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                  {evaluation.concerns.slice(0, 3).map((c, i) => <li key={i} style={{ marginBottom: '2px' }}>{c}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                          {/* Enthusiasm Score */}
+                          {evaluation.enthusiasm_score != null && (
+                            <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Enthusiasm:</span>
+                              <span style={{ fontWeight: 600, color: 'var(--brand-navy)' }}>{Math.round(evaluation.enthusiasm_score)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
