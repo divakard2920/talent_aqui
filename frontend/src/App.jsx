@@ -2584,10 +2584,10 @@ function WalkInsView({ showToast }) {
               className={driveView === tab ? 'btn-sarvam' : 'btn-pill'}
               onClick={async () => {
                 setDriveView(tab);
-                if (tab === 'interviews' && selectedDrive?.job_id) {
+                if (tab === 'interviews' && selectedDrive?.id) {
                   setLoadingInterviews(true);
                   try {
-                    const res = await interviewApi.list({ job_id: selectedDrive.job_id });
+                    const res = await walkinApi.getInterviews(selectedDrive.id);
                     setDriveInterviews(res.data);
                   } catch (err) {
                     console.error('Failed to fetch interviews:', err);

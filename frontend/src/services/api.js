@@ -120,6 +120,7 @@ export const walkinApi = {
   // Results
   getLeaderboard: (driveId) => api.get(`/walkin-drives/${driveId}/leaderboard`),
   getStats: (driveId) => api.get(`/walkin-drives/${driveId}/stats`),
+  getInterviews: (driveId) => api.get(`/walkin-drives/${driveId}/interviews`),
 
   // Actions
   shortlist: (driveId, registrationId) =>

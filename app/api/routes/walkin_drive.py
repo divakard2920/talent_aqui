@@ -1171,3 +1171,86 @@ async def start_walkin_interview(
         "job_id": drive.job_id,
         "status": interview.status,
     }
+
+
+@router.get("/{drive_id}/interviews")
+async def get_drive_interviews(
+    drive_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get all interviews for candidates registered in this specific drive.
+    This filters by both job_id AND candidate_ids from this drive's registrations.
+    """
+    from app.models.candidate import Candidate
+    from app.models.interview import Interview
+    from app.models.job import Job
+
+    # Get drive
+    result = await db.execute(select(WalkInDrive).where(WalkInDrive.id == drive_id))
+    drive = result.scalar_one_or_none()
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+
+    # Get all candidate_ids from registrations in this drive
+    result = await db.execute(
+        select(DriveRegistration.candidate_id).where(
+            DriveRegistration.drive_id == drive_id,
+            DriveRegistration.candidate_id.isnot(None),
+        )
+    )
+    candidate_ids = [row[0] for row in result.fetchall()]
+
+    if not candidate_ids:
+        return []
+
+    # Get interviews for these specific candidates AND this job
+    result = await db.execute(
+        select(Interview)
+        .where(
+            Interview.job_id == drive.job_id,
+            Interview.candidate_id.in_(candidate_ids),
+        )
+        .order_by(Interview.created_at.desc())
+    )
+    interviews = result.scalars().all()
+
+    # Build response with candidate info
+    response = []
+    for interview in interviews:
+        # Get candidate details
+        cand_result = await db.execute(
+            select(Candidate).where(Candidate.id == interview.candidate_id)
+        )
+        candidate = cand_result.scalar_one_or_none()
+
+        # Get job details
+        job_result = await db.execute(
+            select(Job).where(Job.id == interview.job_id)
+        )
+        job = job_result.scalar_one_or_none()
+
+        response.append({
+            "id": interview.id,
+            "candidate_id": interview.candidate_id,
+            "job_id": interview.job_id,
+            "status": interview.status,
+            "scheduled_at": interview.scheduled_at,
+            "started_at": interview.started_at,
+            "ended_at": interview.ended_at,
+            "duration_minutes": interview.duration_minutes,
+            "evaluation": interview.evaluation,
+            "created_at": interview.created_at,
+            "candidate": {
+                "id": candidate.id,
+                "name": candidate.name,
+                "email": candidate.email,
+                "phone": candidate.phone,
+            } if candidate else None,
+            "job": {
+                "id": job.id,
+                "title": job.title,
+            } if job else None,
+        })
+
+    return response
