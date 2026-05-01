@@ -1121,13 +1121,16 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setCreatingInterview(true);
     try {
       const res = await interviewApi.create(candidateId, jobId);
-      setCurrentInterview(res.data);
-      setInterviewJob(job);
-      setInterviewCandidate(candidate);
-      setShowDetailModal(false);  // Close detail modal but keep candidate data
-      setShowInterviewModal(true);
+      const interviewUrl = `${window.location.origin}/?interview=${res.data.id}`;
+
+      // Copy link to clipboard
+      await navigator.clipboard.writeText(interviewUrl);
+      showToast('Interview link copied to clipboard!', 'success');
+
+      // Open in new tab
+      window.open(interviewUrl, '_blank');
     } catch (err) {
-      showToast(err.response?.data?.detail || 'Failed to schedule screening call', 'error');
+      showToast(err.response?.data?.detail || 'Failed to create interview', 'error');
     } finally {
       setCreatingInterview(false);
     }
@@ -3404,8 +3407,10 @@ function WalkInsView({ showToast }) {
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
                 <input
                   type="number"
+                  min="1"
                   value={formData.questions_per_candidate}
-                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
+                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
                   className="input-elegant"
                   style={{ padding: '8px 12px' }}
                 />
@@ -3414,8 +3419,10 @@ function WalkInsView({ showToast }) {
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
                 <input
                   type="number"
+                  min="1"
                   value={formData.test_duration_minutes}
-                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
+                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
                   className="input-elegant"
                   style={{ padding: '8px 12px' }}
                 />
@@ -3424,8 +3431,11 @@ function WalkInsView({ showToast }) {
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
                 <input
                   type="number"
+                  min="1"
+                  max="100"
                   value={formData.passing_score_percent}
-                  onChange={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
+                  onChange={(e) => setFormData({ ...formData, passing_score_percent: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
                   className="input-elegant"
                   style={{ padding: '8px 12px' }}
                 />
@@ -3687,8 +3697,10 @@ function WalkInsView({ showToast }) {
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
                 <input
                   type="number"
+                  min="1"
                   value={formData.questions_per_candidate}
-                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
+                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
                   className="input-elegant"
                   style={{ padding: '8px 12px' }}
                 />
@@ -3697,8 +3709,10 @@ function WalkInsView({ showToast }) {
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
                 <input
                   type="number"
+                  min="1"
                   value={formData.test_duration_minutes}
-                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
+                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
                   className="input-elegant"
                   style={{ padding: '8px 12px' }}
                 />
@@ -3707,8 +3721,11 @@ function WalkInsView({ showToast }) {
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
                 <input
                   type="number"
+                  min="1"
+                  max="100"
                   value={formData.passing_score_percent}
-                  onChange={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
+                  onChange={(e) => setFormData({ ...formData, passing_score_percent: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
                   className="input-elegant"
                   style={{ padding: '8px 12px' }}
                 />
@@ -3774,8 +3791,10 @@ function WalkInsView({ showToast }) {
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
                 <input
                   type="number"
+                  min="1"
                   value={formData.questions_per_candidate}
-                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
+                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
                   className="input-elegant"
                   style={{ padding: '8px 12px' }}
                 />
@@ -3784,8 +3803,10 @@ function WalkInsView({ showToast }) {
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
                 <input
                   type="number"
+                  min="1"
                   value={formData.test_duration_minutes}
-                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
+                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
                   className="input-elegant"
                   style={{ padding: '8px 12px' }}
                 />
@@ -3794,8 +3815,11 @@ function WalkInsView({ showToast }) {
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
                 <input
                   type="number"
+                  min="1"
+                  max="100"
                   value={formData.passing_score_percent}
-                  onChange={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
+                  onChange={(e) => setFormData({ ...formData, passing_score_percent: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
                   className="input-elegant"
                   style={{ padding: '8px 12px' }}
                 />
