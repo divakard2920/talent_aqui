@@ -1237,7 +1237,7 @@ async def get_drive_interviews(
             "status": interview.status,
             "scheduled_at": interview.scheduled_at,
             "started_at": interview.started_at,
-            "ended_at": interview.ended_at,
+            "completed_at": interview.completed_at,
             "duration_minutes": interview.duration_minutes,
             "evaluation": interview.evaluation,
             "created_at": interview.created_at,
