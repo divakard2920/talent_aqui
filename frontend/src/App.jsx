@@ -35,6 +35,7 @@ import {
   UserCheck,
   UserX,
   Clock,
+  Download,
 } from 'lucide-react';
 import './index.css';
 import knorrLogo from './assets/knorr.png';
@@ -496,6 +497,135 @@ function JobsView({ showToast, onViewCandidate }) {
     setFilterStatus('all');
   };
 
+  const downloadScreeningCSV = () => {
+    if (!jobMatches?.matches || !selectedJob) return;
+
+    const headers = ['Rank', 'Name', 'Email', 'Overall Score', 'Skills Score', 'Experience Score', 'Education Score', 'Status', 'Analysis'];
+    const rows = jobMatches.matches.map((match, i) => [
+      i + 1,
+      match.candidate_name || '',
+      match.candidate_email || '',
+      Math.round(match.overall_score || 0),
+      Math.round(match.skills_score || 0),
+      Math.round(match.experience_score || 0),
+      Math.round(match.education_score || 0),
+      match.status || 'pending',
+      `"${(match.analysis || '').replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${selectedJob.title.replace(/\s+/g, '_')}_screening_results.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV downloaded!');
+  };
+
+  const downloadScreeningPDF = () => {
+    if (!jobMatches?.matches || !selectedJob) return;
+
+    // Create printable HTML content
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Screening Results - ${selectedJob.title}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
+          h1 { color: #1E3A5F; margin-bottom: 8px; }
+          .subtitle { color: #666; margin-bottom: 24px; }
+          .summary { display: flex; gap: 32px; margin-bottom: 32px; padding: 20px; background: #f5f5f5; border-radius: 8px; }
+          .summary-item { text-align: center; }
+          .summary-value { font-size: 28px; font-weight: bold; color: #1E3A5F; }
+          .summary-label { font-size: 12px; color: #666; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th { background: #1E3A5F; color: white; padding: 12px 8px; text-align: left; font-size: 12px; }
+          td { padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 11px; }
+          tr:nth-child(even) { background: #f9f9f9; }
+          .score { font-weight: bold; }
+          .score-high { color: #287A4F; }
+          .score-mid { color: #2F5C8F; }
+          .score-low { color: #666; }
+          .status { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+          .status-shortlisted { background: #E4F5E9; color: #287A4F; }
+          .status-rejected { background: #FEE2E2; color: #DC2626; }
+          .status-pending { background: #F4F4F4; color: #666; }
+          .footer { margin-top: 32px; text-align: center; color: #999; font-size: 11px; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>
+        <h1>Screening Results</h1>
+        <p class="subtitle">${selectedJob.title} • ${selectedJob.department || ''} • ${selectedJob.location || 'Remote'}</p>
+
+        <div class="summary">
+          <div class="summary-item">
+            <div class="summary-value">${jobMatches.total_matches || 0}</div>
+            <div class="summary-label">Total Candidates</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-value">${jobMatches.matches.filter(m => m.status === 'shortlisted').length}</div>
+            <div class="summary-label">Shortlisted</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-value">${jobMatches.matches.filter(m => m.status === 'pending').length}</div>
+            <div class="summary-label">Pending</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-value">${jobMatches.matches.filter(m => m.status === 'rejected').length}</div>
+            <div class="summary-label">Rejected</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Candidate</th>
+              <th>Overall</th>
+              <th>Skills</th>
+              <th>Experience</th>
+              <th>Education</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${jobMatches.matches.map((match, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td>
+                  <strong>${match.candidate_name || 'Unknown'}</strong><br/>
+                  <span style="color: #666; font-size: 10px;">${match.candidate_email || ''}</span>
+                </td>
+                <td class="score ${match.overall_score >= 80 ? 'score-high' : match.overall_score >= 60 ? 'score-mid' : 'score-low'}">${Math.round(match.overall_score || 0)}%</td>
+                <td>${Math.round(match.skills_score || 0)}%</td>
+                <td>${Math.round(match.experience_score || 0)}%</td>
+                <td>${Math.round(match.education_score || 0)}%</td>
+                <td><span class="status status-${match.status || 'pending'}">${(match.status || 'pending').toUpperCase()}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        </div>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+    showToast('PDF ready for download!');
+  };
+
   const openEditModal = (job) => {
     setSelectedJob(job);
     setShowEditModal(true);
@@ -713,9 +843,17 @@ function JobsView({ showToast, onViewCandidate }) {
                   </button>
                 ))}
               </div>
-              <button className="btn-pill" onClick={() => handleRescreen(selectedJob)}>
-                <RefreshCw size={14} /> Re-screen
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn-pill" onClick={downloadScreeningCSV} title="Download as CSV">
+                  <Download size={14} /> CSV
+                </button>
+                <button className="btn-pill" onClick={downloadScreeningPDF} title="Download as PDF">
+                  <Download size={14} /> PDF
+                </button>
+                <button className="btn-pill" onClick={() => handleRescreen(selectedJob)}>
+                  <RefreshCw size={14} /> Re-screen
+                </button>
+              </div>
             </div>
 
             {/* Candidate Cards */}
@@ -954,8 +1092,6 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadedCandidate, setUploadedCandidate] = useState(null);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [candidateMatches, setCandidateMatches] = useState([]);
   const [loadingMatches, setLoadingMatches] = useState(false);
@@ -1007,17 +1143,9 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   }, [viewCandidateId, candidates, clearViewCandidateId]);
 
   const handleUpload = async (file) => {
-    setUploading(true);
-    try {
-      const res = await resumeApi.upload(file);
-      setUploadedCandidate(res.data);
-      setCandidates(prev => [res.data, ...prev.filter(c => c.id !== res.data.id)]);
-      showToast('Resume uploaded and analyzed!');
-    } catch (err) {
-      showToast('Failed to upload resume: ' + (err.response?.data?.detail || err.message), 'error');
-    } finally {
-      setUploading(false);
-    }
+    const res = await resumeApi.upload(file);
+    setCandidates(prev => [res.data, ...prev.filter(c => c.id !== res.data.id)]);
+    return res.data;
   };
 
   const handleViewCandidate = async (candidate) => {
@@ -1139,7 +1267,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
           <p style={{ color: 'var(--text-secondary)' }}>All sourced and uploaded candidates.</p>
         </div>
         <button className="btn-sarvam flex-center gap-2" onClick={() => setShowUploadModal(true)}>
-          <Upload size={16} /> Upload Resume
+          <Upload size={16} /> Upload Resumes
         </button>
       </div>
 
@@ -1185,14 +1313,10 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
       {/* Upload Modal */}
       <Modal
         isOpen={showUploadModal}
-        onClose={() => { setShowUploadModal(false); setUploadedCandidate(null); }}
-        title={uploadedCandidate ? 'Candidate Imported' : 'Upload Resume'}
+        onClose={() => setShowUploadModal(false)}
+        title="Upload Resumes"
       >
-        {uploadedCandidate ? (
-          <CandidateResult candidate={uploadedCandidate} onClose={() => { setShowUploadModal(false); setUploadedCandidate(null); }} />
-        ) : (
-          <ResumeUpload onUpload={handleUpload} loading={uploading} />
-        )}
+        <ResumeUpload onUpload={handleUpload} />
       </Modal>
 
       {/* Candidate Detail Modal */}
