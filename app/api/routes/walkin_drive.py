@@ -496,11 +496,11 @@ async def walkin_register_with_resume(
     experience_years: float = Form(None),
     current_company: str = Form(None),
     current_role: str = Form(None),
-    resume: UploadFile = File(None),
+    resume: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Register a walk-in candidate with resume upload.
+    Register a walk-in candidate with resume upload (required).
     """
     import os
     import uuid as uuid_lib

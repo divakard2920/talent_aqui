@@ -2069,6 +2069,8 @@ function WalkInsView({ showToast }) {
     current_role: '',
   });
   const [resumeFile, setResumeFile] = useState(null);
+  const [driveSearchTerm, setDriveSearchTerm] = useState('');
+  const [driveStatusFilter, setDriveStatusFilter] = useState('all'); // all, ongoing, registration_open, draft, completed
 
   // Create/Edit form state
   const [formData, setFormData] = useState({
@@ -2265,32 +2267,23 @@ function WalkInsView({ showToast }) {
   };
 
   const handleWalkinRegister = async () => {
-    if (!walkinForm.name || !walkinForm.email || !walkinForm.phone || !selectedDrive) {
-      showToast('Name, email, and phone are required', 'error');
+    if (!walkinForm.name || !walkinForm.email || !walkinForm.phone || !resumeFile || !selectedDrive) {
+      showToast('Name, email, phone, and resume are required', 'error');
       return;
     }
     setWalkinRegistering(true);
 
     try {
-      let res;
-      if (resumeFile) {
-        // Use FormData for file upload
-        const formData = new FormData();
-        formData.append('name', walkinForm.name);
-        formData.append('email', walkinForm.email);
-        formData.append('phone', walkinForm.phone);
-        if (walkinForm.experience_years) formData.append('experience_years', walkinForm.experience_years);
-        if (walkinForm.current_company) formData.append('current_company', walkinForm.current_company);
-        if (walkinForm.current_role) formData.append('current_role', walkinForm.current_role);
-        formData.append('resume', resumeFile);
-        res = await walkinApi.walkinRegisterWithResume(selectedDrive.id, formData);
-      } else {
-        const payload = {
-          ...walkinForm,
-          experience_years: walkinForm.experience_years ? parseFloat(walkinForm.experience_years) : null,
-        };
-        res = await walkinApi.walkinRegister(selectedDrive.id, payload);
-      }
+      // Use FormData for file upload (resume is required)
+      const formData = new FormData();
+      formData.append('name', walkinForm.name);
+      formData.append('email', walkinForm.email);
+      formData.append('phone', walkinForm.phone);
+      if (walkinForm.experience_years) formData.append('experience_years', walkinForm.experience_years);
+      if (walkinForm.current_company) formData.append('current_company', walkinForm.current_company);
+      if (walkinForm.current_role) formData.append('current_role', walkinForm.current_role);
+      formData.append('resume', resumeFile);
+      const res = await walkinApi.walkinRegisterWithResume(selectedDrive.id, formData);
 
       setLastToken({
         token_number: res.data.token_number,
@@ -2469,8 +2462,8 @@ function WalkInsView({ showToast }) {
               </button>
             )}
 
-            {/* Copy registration link */}
-            {selectedDrive.registration_slug && (
+            {/* Copy registration link - only show when registration is open */}
+            {selectedDrive.registration_slug && selectedDrive.status === 'registration_open' && (
               <button
                 className="btn-pill"
                 onClick={() => {
@@ -2735,29 +2728,67 @@ function WalkInsView({ showToast }) {
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Resume (optional)</label>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      onChange={(e) => setResumeFile(e.target.files[0] || null)}
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Resume *</label>
+                    <div
                       style={{
-                        width: '100%',
-                        padding: '10px',
-                        border: '1px solid #E5E7EB',
+                        position: 'relative',
+                        border: `2px dashed ${resumeFile ? '#10B981' : '#D1D5DB'}`,
                         borderRadius: '8px',
-                        fontSize: '0.9rem',
+                        padding: '16px',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        background: resumeFile ? '#F0FDF4' : '#F9FAFB',
+                        transition: 'all 0.2s ease',
                       }}
-                    />
-                    {resumeFile && (
-                      <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#6B7280' }}>
-                        Selected: {resumeFile.name}
-                      </p>
-                    )}
+                      onClick={() => document.getElementById('resume-input').click()}
+                    >
+                      <input
+                        id="resume-input"
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        onChange={(e) => setResumeFile(e.target.files[0] || null)}
+                        style={{ display: 'none' }}
+                      />
+                      {resumeFile ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                          <FileText size={20} style={{ color: '#10B981' }} />
+                          <span style={{ color: '#166534', fontWeight: 500 }}>{resumeFile.name}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setResumeFile(null); }}
+                            style={{
+                              background: '#FEE2E2',
+                              border: 'none',
+                              borderRadius: '50%',
+                              width: '20px',
+                              height: '20px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              marginLeft: '4px',
+                            }}
+                          >
+                            <X size={12} style={{ color: '#DC2626' }} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <Upload size={24} style={{ color: '#9CA3AF', marginBottom: '4px' }} />
+                          <p style={{ margin: 0, color: '#6B7280', fontSize: '0.85rem' }}>
+                            Click to upload resume
+                          </p>
+                          <p style={{ margin: '4px 0 0', color: '#9CA3AF', fontSize: '0.75rem' }}>
+                            PDF, DOC, DOCX
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <button
                     className="btn-sarvam"
                     onClick={handleWalkinRegister}
-                    disabled={walkinRegistering || !walkinForm.name || !walkinForm.email || !walkinForm.phone}
+                    disabled={walkinRegistering || !walkinForm.name || !walkinForm.email || !walkinForm.phone || !resumeFile}
                     style={{ marginTop: '8px', padding: '14px' }}
                   >
                     {walkinRegistering ? <Loader2 size={18} className="spin" /> : <UserCheck size={18} />}
@@ -3415,7 +3446,7 @@ function WalkInsView({ showToast }) {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Walk-in Drives</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>
@@ -3426,6 +3457,35 @@ function WalkInsView({ showToast }) {
           <Plus size={18} /> Create Drive
         </button>
       </div>
+
+      {/* Search and Filter */}
+      {drives.length > 0 && (
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ position: 'relative', flex: '1', minWidth: '200px', maxWidth: '400px' }}>
+            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              placeholder="Search drives..."
+              value={driveSearchTerm}
+              onChange={(e) => setDriveSearchTerm(e.target.value)}
+              className="input-elegant"
+              style={{ paddingLeft: '40px', width: '100%' }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {['all', 'ongoing', 'registration_open', 'draft', 'completed'].map(status => (
+              <button
+                key={status}
+                className={driveStatusFilter === status ? 'btn-sarvam' : 'btn-pill'}
+                onClick={() => setDriveStatusFilter(status)}
+                style={{ fontSize: '0.85rem', padding: '8px 16px', textTransform: 'capitalize' }}
+              >
+                {status === 'all' ? 'All' : status.replace('_', ' ')}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Drives List */}
       {drives.length === 0 ? (
@@ -3439,19 +3499,62 @@ function WalkInsView({ showToast }) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {drives.map(drive => {
+          {drives
+            // Filter by status
+            .filter(drive => driveStatusFilter === 'all' || drive.status === driveStatusFilter)
+            // Filter by search term
+            .filter(drive => {
+              if (!driveSearchTerm.trim()) return true;
+              const term = driveSearchTerm.toLowerCase();
+              const job = jobs.find(j => j.id === drive.job_id);
+              return (
+                drive.title.toLowerCase().includes(term) ||
+                job?.title?.toLowerCase().includes(term)
+              );
+            })
+            // Sort: ongoing first, then by date descending
+            .sort((a, b) => {
+              // Priority: ongoing > registration_open > draft > completed
+              const statusPriority = { ongoing: 0, registration_open: 1, draft: 2, completed: 3 };
+              const priorityDiff = (statusPriority[a.status] ?? 4) - (statusPriority[b.status] ?? 4);
+              if (priorityDiff !== 0) return priorityDiff;
+              // Same status: sort by date descending
+              return new Date(b.drive_date) - new Date(a.drive_date);
+            })
+            .map(drive => {
             const job = jobs.find(j => j.id === drive.job_id);
             return (
               <div
                 key={drive.id}
                 className="sovereign-card"
-                style={{ cursor: 'pointer' }}
+                style={{
+                  cursor: 'pointer',
+                  border: drive.status === 'ongoing' ? '2px solid #10B981' : undefined,
+                }}
                 onClick={() => handleSelectDrive(drive)}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
-                    <h3 style={{ margin: '0 0 4px' }}>{drive.title}</h3>
-                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <h3 style={{ margin: '0' }}>{drive.title}</h3>
+                      {drive.status === 'ongoing' && (
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '2px 8px',
+                          background: '#10B981',
+                          color: 'white',
+                          borderRadius: '4px',
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                        }}>
+                          <span style={{ width: '6px', height: '6px', background: 'white', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                          LIVE
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                       {job?.title} • {new Date(drive.drive_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
                   </div>
@@ -3484,6 +3587,29 @@ function WalkInsView({ showToast }) {
               </div>
             );
           })}
+          {/* No results message */}
+          {drives.length > 0 && drives
+            .filter(drive => driveStatusFilter === 'all' || drive.status === driveStatusFilter)
+            .filter(drive => {
+              if (!driveSearchTerm.trim()) return true;
+              const term = driveSearchTerm.toLowerCase();
+              const job = jobs.find(j => j.id === drive.job_id);
+              return drive.title.toLowerCase().includes(term) || job?.title?.toLowerCase().includes(term);
+            }).length === 0 && (
+            <div className="sovereign-card" style={{ textAlign: 'center', padding: '40px' }}>
+              <Search size={32} style={{ color: 'var(--text-muted)', marginBottom: '12px' }} />
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                No drives found matching your filters.
+              </p>
+              <button
+                className="btn-pill"
+                onClick={() => { setDriveSearchTerm(''); setDriveStatusFilter('all'); }}
+                style={{ marginTop: '12px' }}
+              >
+                Clear Filters
+              </button>
+            </div>
+          )}
         </div>
       )}
 
