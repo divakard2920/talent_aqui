@@ -1199,7 +1199,7 @@ async def get_drive_interviews(
             DriveRegistration.candidate_id.isnot(None),
         )
     )
-    candidate_ids = [row[0] for row in result.fetchall()]
+    candidate_ids = result.scalars().all()
 
     if not candidate_ids:
         return []
