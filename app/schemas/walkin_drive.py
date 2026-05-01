@@ -122,6 +122,8 @@ class RegistrationResponse(BaseModel):
     assigned_questions: Optional[list] = None
     answers: Optional[dict] = None
     registered_at: datetime
+    interview_status: Optional[str] = None
+    interview_score: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -192,6 +194,8 @@ class LeaderboardEntry(BaseModel):
     test_passed: Optional[bool] = None
     status: str
     checked_in_at: Optional[datetime] = None
+    interview_status: Optional[str] = None
+    interview_score: Optional[float] = None
 
 
 class DriveStats(BaseModel):

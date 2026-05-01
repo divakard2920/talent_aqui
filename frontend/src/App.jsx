@@ -2182,6 +2182,8 @@ function WalkInsView({ showToast }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
   const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [driveInterviews, setDriveInterviews] = useState([]);
+  const [loadingInterviews, setLoadingInterviews] = useState(false);
   const [answersCandidate, setAnswersCandidate] = useState(null);
 
   useEffect(() => {
@@ -2575,11 +2577,24 @@ function WalkInsView({ showToast }) {
 
         {/* Tab Navigation */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-          {['details', 'registrations', 'checkin', ...(selectedDrive.test_enabled ? ['leaderboard'] : [])].map(tab => (
+          {['details', 'registrations', 'checkin', ...(selectedDrive.test_enabled ? ['leaderboard'] : []), 'interviews'].map(tab => (
             <button
               key={tab}
               className={driveView === tab ? 'btn-sarvam' : 'btn-pill'}
-              onClick={() => setDriveView(tab)}
+              onClick={async () => {
+                setDriveView(tab);
+                if (tab === 'interviews' && selectedDrive?.job_id) {
+                  setLoadingInterviews(true);
+                  try {
+                    const res = await interviewApi.list({ job_id: selectedDrive.job_id });
+                    setDriveInterviews(res.data);
+                  } catch (err) {
+                    console.error('Failed to fetch interviews:', err);
+                  } finally {
+                    setLoadingInterviews(false);
+                  }
+                }
+              }}
               style={{ textTransform: 'capitalize' }}
             >
               {tab === 'checkin' ? 'Front Desk' : tab}
@@ -3063,6 +3078,179 @@ function WalkInsView({ showToast }) {
             )}
           </div>
         )}
+
+        {/* Interviews Tab */}
+        {driveView === 'interviews' && (
+          <div className="sovereign-card">
+            <h3 style={{ margin: '0 0 16px' }}>L1 Interviews with Arun</h3>
+            {loadingInterviews ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Loader2 size={32} className="spin" style={{ color: 'var(--brand-navy)' }} />
+                <p style={{ margin: '12px 0 0', color: 'var(--text-muted)' }}>Loading interviews...</p>
+              </div>
+            ) : driveInterviews.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <Phone size={48} style={{ marginBottom: '12px', opacity: 0.5 }} />
+                <p style={{ margin: 0 }}>No interviews yet. Shortlisted candidates can start their L1 interview from the test portal.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {driveInterviews.map(interview => {
+                  const evaluation = interview.evaluation || {};
+                  const candidate = interview.candidate || {};
+                  return (
+                    <div
+                      key={interview.id}
+                      style={{
+                        padding: '20px',
+                        background: interview.status === 'completed' ? '#F0FDF4' : '#FEF3C7',
+                        border: `1px solid ${interview.status === 'completed' ? '#10B981' : '#F59E0B'}`,
+                        borderRadius: '12px',
+                      }}
+                    >
+                      {/* Header */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                        <div>
+                          <h4 style={{ margin: '0 0 4px', fontSize: '1.1rem' }}>{candidate.name || 'Unknown'}</h4>
+                          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            {candidate.email}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {interview.duration_minutes && (
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                              {interview.duration_minutes} min
+                            </span>
+                          )}
+                          <span style={{
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            background: interview.status === 'completed' ? '#DCFCE7' : interview.status === 'in_progress' ? '#FEF3C7' : '#E0E7FF',
+                            color: interview.status === 'completed' ? '#166534' : interview.status === 'in_progress' ? '#92400E' : '#4338CA',
+                          }}>
+                            {interview.status.replace('_', ' ')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {interview.status === 'completed' && evaluation && (
+                        <>
+                          {/* Scores Grid */}
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(5, 1fr)',
+                            gap: '12px',
+                            padding: '16px',
+                            background: 'white',
+                            borderRadius: '8px',
+                            marginBottom: '16px',
+                          }}>
+                            <div style={{ textAlign: 'center' }}>
+                              <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: 700, color: evaluation.overall_score >= 70 ? '#166534' : evaluation.overall_score >= 50 ? '#F59E0B' : '#DC2626' }}>
+                                {evaluation.overall_score != null ? Math.round(evaluation.overall_score) : '-'}
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)' }}>Overall</p>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                              <p style={{ margin: 0, fontSize: '1.3rem', fontWeight: 600, color: 'var(--brand-navy)' }}>
+                                {evaluation.communication_score != null ? Math.round(evaluation.communication_score) : '-'}
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)' }}>Communication</p>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                              <p style={{ margin: 0, fontSize: '1.3rem', fontWeight: 600, color: 'var(--brand-navy)' }}>
+                                {evaluation.technical_score != null ? Math.round(evaluation.technical_score) : '-'}
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)' }}>Technical</p>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                              <p style={{ margin: 0, fontSize: '1.3rem', fontWeight: 600, color: 'var(--brand-navy)' }}>
+                                {evaluation.culture_fit_score != null ? Math.round(evaluation.culture_fit_score) : '-'}
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)' }}>Culture Fit</p>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                              <p style={{ margin: 0, fontSize: '1.3rem', fontWeight: 600, color: 'var(--brand-navy)' }}>
+                                {evaluation.enthusiasm_score != null ? Math.round(evaluation.enthusiasm_score) : '-'}
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)' }}>Enthusiasm</p>
+                            </div>
+                          </div>
+
+                          {/* Recommendation */}
+                          {evaluation.recommendation && (
+                            <div style={{
+                              padding: '12px 16px',
+                              background: evaluation.recommendation === 'proceed_to_l2' ? '#DCFCE7' : evaluation.recommendation === 'reject' ? '#FEE2E2' : '#FEF3C7',
+                              borderRadius: '8px',
+                              marginBottom: '12px',
+                            }}>
+                              <span style={{
+                                fontWeight: 600,
+                                color: evaluation.recommendation === 'proceed_to_l2' ? '#166534' : evaluation.recommendation === 'reject' ? '#991B1B' : '#92400E',
+                              }}>
+                                Recommendation: {evaluation.recommendation.replace(/_/g, ' ').toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Summary */}
+                          {evaluation.summary && (
+                            <div style={{ marginBottom: '12px' }}>
+                              <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                                {evaluation.summary}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Strengths & Concerns */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                            {evaluation.strengths?.length > 0 && (
+                              <div>
+                                <h5 style={{ margin: '0 0 8px', fontSize: '0.85rem', color: '#166534' }}>Strengths</h5>
+                                <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                  {evaluation.strengths.slice(0, 3).map((s, i) => <li key={i}>{s}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                            {evaluation.concerns?.length > 0 && (
+                              <div>
+                                <h5 style={{ margin: '0 0 8px', fontSize: '0.85rem', color: '#DC2626' }}>Concerns</h5>
+                                <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                  {evaluation.concerns.slice(0, 3).map((c, i) => <li key={i}>{c}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+
+                      {interview.status !== 'completed' && (
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '12px',
+                          background: 'white',
+                          borderRadius: '8px',
+                        }}>
+                          <Clock size={18} style={{ color: '#F59E0B' }} />
+                          <p style={{ margin: 0, fontSize: '0.9rem', color: '#92400E' }}>
+                            {interview.status === 'in_progress' ? 'Interview is currently in progress...' : 'Interview scheduled - waiting for candidate'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
       {/* Candidate Detail Modal */}
       <Modal isOpen={!!selectedCandidate} onClose={() => setSelectedCandidate(null)} title="Candidate Details">
         {selectedCandidate && (
@@ -3160,6 +3348,38 @@ function WalkInsView({ showToast }) {
                       </p>
                       <p style={{ margin: 0, fontSize: '0.8rem' }}>
                         Short Answer: {selectedCandidate.test_score_breakdown.short_answer?.earned || 0} / {selectedCandidate.test_score_breakdown.short_answer?.total || 0}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Interview Results */}
+            {selectedCandidate.interview_status && (
+              <div style={{
+                background: selectedCandidate.interview_status === 'completed' ? '#EEF2FF' : '#FEF3C7',
+                borderRadius: '12px',
+                padding: '16px',
+              }}>
+                <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: selectedCandidate.interview_status === 'completed' ? '#4F46E5' : '#92400E' }}>
+                  L1 Interview with Arun
+                </h4>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                  {selectedCandidate.interview_status === 'completed' ? (
+                    <>
+                      <div style={{ textAlign: 'center' }}>
+                        <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: 700, color: '#4F46E5' }}>
+                          {selectedCandidate.interview_score != null ? `${Math.round(selectedCandidate.interview_score)}%` : '-'}
+                        </p>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#4F46E5' }}>COMPLETED</p>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Clock size={20} style={{ color: '#92400E' }} />
+                      <p style={{ margin: 0, color: '#92400E', fontWeight: 500 }}>
+                        {selectedCandidate.interview_status === 'in_progress' ? 'Interview in progress...' : 'Interview scheduled'}
                       </p>
                     </div>
                   )}
@@ -4883,7 +5103,24 @@ function CandidateTestPortal({ driveId }) {
             </p>
 
             {/* Status-specific next steps */}
-            {candidate?.status === 'shortlisted' && (
+            {candidate?.status === 'shortlisted' && candidate?.interview_status === 'completed' && (
+              <div style={{
+                marginTop: '32px',
+                padding: '20px',
+                background: '#DCFCE7',
+                border: '1px solid #10B981',
+                borderRadius: '12px',
+              }}>
+                <h3 style={{ margin: '0 0 12px', color: '#166534', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CheckCircle size={24} /> Interview Completed!
+                </h3>
+                <p style={{ margin: 0, color: '#166534' }}>
+                  Thank you for completing your interview with Arun. Our team will review your interview and get back to you soon.
+                </p>
+              </div>
+            )}
+
+            {candidate?.status === 'shortlisted' && candidate?.interview_status !== 'completed' && (
               <div style={{
                 marginTop: '32px',
                 padding: '20px',
@@ -4893,13 +5130,15 @@ function CandidateTestPortal({ driveId }) {
               }}>
                 <h3 style={{ margin: '0 0 12px', color: '#166534' }}>You've been Shortlisted!</h3>
                 <p style={{ margin: '0 0 16px', color: '#166534' }}>
-                  Congratulations! You are now eligible for Level 1 Interview with Arun.
+                  {candidate?.interview_status
+                    ? 'Continue your Level 1 Interview with Arun.'
+                    : 'Congratulations! You are now eligible for Level 1 Interview with Arun.'}
                 </p>
                 <button
                   onClick={async () => {
                     try {
                       setLoading(true);
-                      // Create interview via API
+                      // Create or get existing interview via API
                       const res = await walkinApi.startInterview(driveId, candidate.registration_id);
                       // Navigate to interview page with interview ID
                       window.location.href = `/?interview=${res.data.interview_id}`;
@@ -4926,7 +5165,7 @@ function CandidateTestPortal({ driveId }) {
                   }}
                 >
                   {loading ? <Loader2 size={18} className="spin" /> : <Phone size={18} />}
-                  {loading ? 'Starting Interview...' : 'Continue to Level 1 Interview with Arun'}
+                  {loading ? 'Loading...' : (candidate?.interview_status ? 'Resume Interview with Arun' : 'Start Interview with Arun')}
                 </button>
               </div>
             )}

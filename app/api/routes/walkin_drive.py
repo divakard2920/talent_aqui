@@ -327,13 +327,21 @@ async def get_drive_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/{drive_id}/registrations", response_model=list[RegistrationResponse])
+@router.get("/{drive_id}/registrations")
 async def list_registrations(
     drive_id: int,
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """List all registrations for a drive."""
+    """List all registrations for a drive with interview data."""
+    from app.models.interview import Interview
+
+    # Get drive for job_id
+    result = await db.execute(select(WalkInDrive).where(WalkInDrive.id == drive_id))
+    drive = result.scalar_one_or_none()
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+
     query = select(DriveRegistration).where(DriveRegistration.drive_id == drive_id)
 
     if status:
@@ -342,7 +350,57 @@ async def list_registrations(
     query = query.order_by(DriveRegistration.registered_at.desc())
 
     result = await db.execute(query)
-    return result.scalars().all()
+    registrations = result.scalars().all()
+
+    # Get all candidate IDs that might have interviews
+    candidate_ids = [reg.candidate_id for reg in registrations if reg.candidate_id]
+    interviews_map = {}
+    if candidate_ids:
+        result = await db.execute(
+            select(Interview).where(
+                Interview.candidate_id.in_(candidate_ids),
+                Interview.job_id == drive.job_id,
+            )
+        )
+        interviews = result.scalars().all()
+        for interview in interviews:
+            interviews_map[interview.candidate_id] = interview
+
+    # Build response with interview data
+    response = []
+    for reg in registrations:
+        interview = interviews_map.get(reg.candidate_id) if reg.candidate_id else None
+        interview_score = None
+        if interview and interview.evaluation:
+            interview_score = interview.evaluation.get("overall_score")
+
+        reg_dict = {
+            "id": reg.id,
+            "drive_id": reg.drive_id,
+            "candidate_id": reg.candidate_id,
+            "name": reg.name,
+            "email": reg.email,
+            "phone": reg.phone,
+            "experience_years": reg.experience_years,
+            "current_company": reg.current_company,
+            "current_role": reg.current_role,
+            "selected_slot": reg.selected_slot,
+            "registration_code": reg.registration_code,
+            "token_number": reg.token_number,
+            "status": reg.status,
+            "checked_in_at": reg.checked_in_at,
+            "test_score": reg.test_score,
+            "test_passed": reg.test_passed,
+            "test_score_breakdown": reg.test_score_breakdown,
+            "assigned_questions": reg.assigned_questions,
+            "answers": reg.answers,
+            "registered_at": reg.registered_at,
+            "interview_status": interview.status if interview else None,
+            "interview_score": interview_score,
+        }
+        response.append(reg_dict)
+
+    return response
 
 
 # --- Check-in ---
@@ -814,6 +872,14 @@ async def submit_test(
 @router.get("/{drive_id}/leaderboard", response_model=list[LeaderboardEntry])
 async def get_leaderboard(drive_id: int, db: AsyncSession = Depends(get_db)):
     """Get ranked leaderboard of candidates."""
+    from app.models.interview import Interview
+
+    # Get drive for job_id
+    result = await db.execute(select(WalkInDrive).where(WalkInDrive.id == drive_id))
+    drive = result.scalar_one_or_none()
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+
     result = await db.execute(
         select(DriveRegistration)
         .where(DriveRegistration.drive_id == drive_id)
@@ -821,8 +887,27 @@ async def get_leaderboard(drive_id: int, db: AsyncSession = Depends(get_db)):
     )
     registrations = result.scalars().all()
 
+    # Get all candidate IDs that have interviews
+    candidate_ids = [reg.candidate_id for reg in registrations if reg.candidate_id]
+    interviews_map = {}
+    if candidate_ids:
+        result = await db.execute(
+            select(Interview).where(
+                Interview.candidate_id.in_(candidate_ids),
+                Interview.job_id == drive.job_id,
+            )
+        )
+        interviews = result.scalars().all()
+        for interview in interviews:
+            interviews_map[interview.candidate_id] = interview
+
     leaderboard = []
     for i, reg in enumerate(registrations):
+        interview = interviews_map.get(reg.candidate_id) if reg.candidate_id else None
+        interview_score = None
+        if interview and interview.evaluation:
+            interview_score = interview.evaluation.get("overall_score")
+
         leaderboard.append(LeaderboardEntry(
             rank=i + 1,
             registration_id=reg.id,
@@ -834,6 +919,8 @@ async def get_leaderboard(drive_id: int, db: AsyncSession = Depends(get_db)):
             test_passed=reg.test_passed,
             status=reg.status,
             checked_in_at=reg.checked_in_at,
+            interview_status=interview.status if interview else None,
+            interview_score=interview_score,
         ))
 
     return leaderboard
@@ -909,6 +996,25 @@ async def lookup_candidate(
         total_seconds = drive.test_duration_minutes * 60
         remaining_seconds = max(0, int(total_seconds - elapsed))
 
+    # Check for existing interview
+    from app.models.interview import Interview
+    interview_status = None
+    interview_id = None
+    interview_score = None
+    if registration.candidate_id:
+        result = await db.execute(
+            select(Interview).where(
+                Interview.candidate_id == registration.candidate_id,
+                Interview.job_id == drive.job_id,
+            ).order_by(Interview.created_at.desc())
+        )
+        interview = result.scalar_one_or_none()
+        if interview:
+            interview_id = interview.id
+            interview_status = interview.status
+            if interview.evaluation:
+                interview_score = interview.evaluation.get("overall_score")
+
     return {
         "registration_id": registration.id,
         "name": registration.name,
@@ -923,6 +1029,9 @@ async def lookup_candidate(
         "test_duration_minutes": drive.test_duration_minutes,
         "remaining_seconds": remaining_seconds,
         "drive_status": drive.status,
+        "interview_id": interview_id,
+        "interview_status": interview_status,
+        "interview_score": interview_score,
     }
 
 
@@ -1028,7 +1137,25 @@ async def start_walkin_interview(
     registration.candidate_id = candidate.id
     await db.commit()
 
-    # Create interview
+    # Check if interview already exists for this candidate and job
+    result = await db.execute(
+        select(Interview).where(
+            Interview.candidate_id == candidate.id,
+            Interview.job_id == drive.job_id,
+        ).order_by(Interview.created_at.desc())
+    )
+    existing_interview = result.scalar_one_or_none()
+
+    if existing_interview:
+        # Return existing interview
+        return {
+            "interview_id": existing_interview.id,
+            "candidate_id": candidate.id,
+            "job_id": drive.job_id,
+            "status": existing_interview.status,
+        }
+
+    # Create new interview only if none exists
     interview = Interview(
         candidate_id=candidate.id,
         job_id=drive.job_id,
