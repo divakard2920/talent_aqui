@@ -2250,6 +2250,7 @@ function WalkInsView({ showToast }) {
     setStats(null);
     setLeaderboard([]);
     setLastToken(null);
+    setDriveInterviews([]);
 
     // Fetch registrations and stats for THIS drive
     try {
