@@ -122,10 +122,16 @@ function App() {
   // Check for candidate test mode via URL parameter
   const urlParams = new URLSearchParams(window.location.search);
   const testDriveId = urlParams.get('test');
+  const interviewId = urlParams.get('interview');
 
   // If in test mode, show candidate test portal
   if (testDriveId) {
     return <CandidateTestPortal driveId={parseInt(testDriveId)} />;
+  }
+
+  // If in interview mode, show interview portal
+  if (interviewId) {
+    return <InterviewPortal interviewId={parseInt(interviewId)} />;
   }
 
   return (
@@ -4206,6 +4212,143 @@ function GitHubView({ showToast }) {
         )}
       </Modal>
     </motion.div>
+  );
+}
+
+// --- Interview Portal (for candidates taking L1 interview with Arun) ---
+function InterviewPortal({ interviewId }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [interview, setInterview] = useState(null);
+  const [candidate, setCandidate] = useState(null);
+  const [job, setJob] = useState(null);
+  const [completed, setCompleted] = useState(false);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    const loadInterview = async () => {
+      try {
+        const interviewRes = await interviewApi.get(interviewId);
+        const interviewData = interviewRes.data;
+
+        // Check if already completed
+        if (interviewData.status === 'completed') {
+          setResult(interviewData.evaluation);
+          setCompleted(true);
+          setLoading(false);
+          return;
+        }
+
+        // Fetch job and candidate details
+        const [jobRes, candidateRes] = await Promise.all([
+          jobsApi.get(interviewData.job_id),
+          candidatesApi.get(interviewData.candidate_id),
+        ]);
+
+        setInterview(interviewData);
+        setJob(jobRes.data);
+        setCandidate(candidateRes.data);
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Failed to load interview');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInterview();
+  }, [interviewId]);
+
+  const handleComplete = (evalResult) => {
+    setResult(evalResult);
+    setCompleted(true);
+  };
+
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #1E3A5F 0%, #0F1C2E 100%)',
+      }}>
+        <div style={{ textAlign: 'center', color: 'white' }}>
+          <Loader2 size={48} className="spin" style={{ marginBottom: '16px' }} />
+          <p style={{ fontSize: '1.2rem' }}>Loading interview...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #1E3A5F 0%, #0F1C2E 100%)',
+      }}>
+        <div style={{
+          background: 'white',
+          padding: '40px',
+          borderRadius: '16px',
+          textAlign: 'center',
+          maxWidth: '400px',
+        }}>
+          <AlertCircle size={48} style={{ color: '#EF4444', marginBottom: '16px' }} />
+          <h2 style={{ margin: '0 0 12px' }}>Error</h2>
+          <p style={{ color: '#6B7280', margin: 0 }}>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (completed) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #1E3A5F 0%, #0F1C2E 100%)',
+      }}>
+        <div style={{
+          background: 'white',
+          padding: '48px',
+          borderRadius: '16px',
+          textAlign: 'center',
+          maxWidth: '500px',
+        }}>
+          <CheckCircle size={64} style={{ color: '#10B981', marginBottom: '20px' }} />
+          <h2 style={{ margin: '0 0 12px', fontSize: '1.8rem' }}>Interview Complete!</h2>
+          <p style={{ color: '#6B7280', margin: '0 0 16px', fontSize: '1.1rem' }}>
+            Thank you for completing your interview with Arun.
+          </p>
+          <p style={{ color: '#9CA3AF', fontSize: '0.9rem', margin: 0 }}>
+            Our team will review your interview and get back to you soon.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #1E3A5F 0%, #0F1C2E 100%)',
+      padding: '20px',
+    }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+        <InterviewRoom
+          interview={interview}
+          candidate={candidate}
+          job={job}
+          onComplete={handleComplete}
+          onClose={() => setCompleted(true)}
+        />
+      </div>
+    </div>
   );
 }
 
