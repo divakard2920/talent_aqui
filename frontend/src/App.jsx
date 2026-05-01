@@ -1006,40 +1006,6 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     }
   }, [viewCandidateId, candidates, clearViewCandidateId]);
 
-  // Handle interview URL parameter (from walk-in shortlist)
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const interviewId = urlParams.get('interview');
-    if (interviewId) {
-      // Fetch interview and start it
-      const loadInterview = async () => {
-        try {
-          const interviewRes = await interviewApi.get(interviewId);
-          const interview = interviewRes.data;
-
-          // Fetch job details
-          const jobRes = await jobsApi.get(interview.job_id);
-          const job = jobRes.data;
-
-          // Fetch candidate details
-          const candidateRes = await candidatesApi.get(interview.candidate_id);
-          const candidate = candidateRes.data;
-
-          setCurrentInterview(interview);
-          setInterviewJob(job);
-          setInterviewCandidate(candidate);
-          setShowInterviewModal(true);
-
-          // Clean up URL
-          window.history.replaceState({}, '', window.location.pathname);
-        } catch (err) {
-          console.error('Failed to load interview:', err);
-        }
-      };
-      loadInterview();
-    }
-  }, []);
-
   const handleUpload = async (file) => {
     setUploading(true);
     try {
@@ -1121,16 +1087,13 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setCreatingInterview(true);
     try {
       const res = await interviewApi.create(candidateId, jobId);
-      const interviewUrl = `${window.location.origin}/?interview=${res.data.id}`;
-
-      // Copy link to clipboard
-      await navigator.clipboard.writeText(interviewUrl);
-      showToast('Interview link copied to clipboard!', 'success');
-
-      // Open in new tab
-      window.open(interviewUrl, '_blank');
+      setCurrentInterview(res.data);
+      setInterviewJob(job);
+      setInterviewCandidate(candidate);
+      setShowDetailModal(false);  // Close detail modal but keep candidate data
+      setShowInterviewModal(true);
     } catch (err) {
-      showToast(err.response?.data?.detail || 'Failed to create interview', 'error');
+      showToast(err.response?.data?.detail || 'Failed to schedule screening call', 'error');
     } finally {
       setCreatingInterview(false);
     }
