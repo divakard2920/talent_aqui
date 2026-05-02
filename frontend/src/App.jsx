@@ -99,11 +99,48 @@ function Toast({ message, type = 'success', onClose }) {
   );
 }
 
+// URL State Management Utility
+const useUrlState = () => {
+  const getParams = () => new URLSearchParams(window.location.search);
+
+  const updateUrl = (updates, clearKeys = []) => {
+    const params = getParams();
+    // Clear specified keys
+    clearKeys.forEach(key => params.delete(key));
+    // Apply updates
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === undefined || value === '') {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+    });
+    const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+    window.history.replaceState({}, '', newUrl);
+  };
+
+  const getParam = (key) => getParams().get(key);
+
+  return { getParam, updateUrl, getParams };
+};
+
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const { getParam, updateUrl } = useUrlState();
+
+  // Read initial state from URL
+  const getInitialTab = () => {
+    const view = getParam('view');
+    const validTabs = ['dashboard', 'jobs', 'candidates', 'interviews', 'walk-ins', 'github'];
+    return validTabs.includes(view) ? view : 'dashboard';
+  };
+
+  const [activeTab, setActiveTab] = useState(getInitialTab);
   const [scrolled, setScrolled] = useState(false);
   const [toast, setToast] = useState(null);
-  const [viewCandidateId, setViewCandidateId] = useState(null);
+  const [viewCandidateId, setViewCandidateId] = useState(() => {
+    const id = getParam('candidate');
+    return id ? parseInt(id) : null;
+  });
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -111,7 +148,16 @@ function App() {
 
   const handleViewCandidate = (candidateId) => {
     setViewCandidateId(candidateId);
-    setActiveTab('candidates');
+    handleTabChange('candidates', { candidate: candidateId });
+  };
+
+  // Update URL when tab changes
+  const handleTabChange = (tab, extraParams = {}) => {
+    setActiveTab(tab);
+    // Clear view-specific params when switching views
+    const clearKeys = ['drive', 'tab', 'job', 'candidate'];
+    const updates = { view: tab === 'dashboard' ? null : tab, ...extraParams };
+    updateUrl(updates, clearKeys.filter(k => !extraParams[k]));
   };
 
   useEffect(() => {
@@ -178,7 +224,7 @@ function App() {
             {['dashboard', 'jobs', 'candidates', 'interviews', 'walk-ins', 'github'].map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => handleTabChange(tab)}
                 style={{
                   background: activeTab === tab ? '#131313' : 'transparent',
                   color: activeTab === tab ? '#FFFFFF' : 'var(--text-secondary)',
@@ -204,7 +250,7 @@ function App() {
       {/* Main Content */}
       <main className="container" style={{ paddingTop: '140px', paddingBottom: '80px' }}>
         <AnimatePresence mode="wait">
-          {activeTab === 'dashboard' && <DashboardView key="dashboard" onNavigate={setActiveTab} />}
+          {activeTab === 'dashboard' && <DashboardView key="dashboard" onNavigate={handleTabChange} />}
           {activeTab === 'jobs' && <JobsView key="jobs" showToast={showToast} onViewCandidate={handleViewCandidate} />}
           {activeTab === 'candidates' && <CandidatesView key="candidates" showToast={showToast} viewCandidateId={viewCandidateId} clearViewCandidateId={() => setViewCandidateId(null)} />}
           {activeTab === 'interviews' && <InterviewsView key="interviews" showToast={showToast} />}
@@ -376,21 +422,65 @@ function JobsView({ showToast, onViewCandidate }) {
   const [screeningJobId, setScreeningJobId] = useState(null); // Track job being screened
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: 'warning', title: '', message: '', onConfirm: null });
 
+  // URL state helper
+  const updateUrl = (jobId) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', 'jobs');
+    if (jobId) {
+      params.set('job', jobId);
+    } else {
+      params.delete('job');
+    }
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+  };
+
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
       const res = await jobsApi.list();
       setJobs(res.data);
+      return res.data;
     } catch (err) {
       console.error('Failed to fetch jobs:', err);
+      return [];
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Initialize from URL
   useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
+    const init = async () => {
+      const jobsList = await fetchJobs();
+      const params = new URLSearchParams(window.location.search);
+      const jobId = params.get('job');
+      if (jobId && jobsList.length > 0) {
+        const job = jobsList.find(j => j.id === parseInt(jobId));
+        if (job) {
+          setSelectedJob(job);
+          setShowDetailModal(true);
+          // Fetch matches
+          try {
+            const matchRes = await jobsApi.getMatches(job.id);
+            setJobMatches(matchRes.data);
+          } catch (err) {
+            console.error('Failed to fetch matches:', err);
+          }
+        }
+      }
+    };
+    init();
+  }, []);
+
+  // Update URL when job selection changes
+  const isInitialMount = React.useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    updateUrl(showDetailModal ? selectedJob?.id : null);
+  }, [selectedJob?.id, showDetailModal]);
 
   const handleCreateJob = async (data) => {
     setCreating(true);
@@ -1111,6 +1201,18 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   const [interviewJob, setInterviewJob] = useState(null);
   const [creatingInterview, setCreatingInterview] = useState(false);
 
+  // URL state helper
+  const updateUrl = (candidateId) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', 'candidates');
+    if (candidateId) {
+      params.set('candidate', candidateId);
+    } else {
+      params.delete('candidate');
+    }
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+  };
+
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
     try {
@@ -1129,9 +1231,38 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     }
   }, []);
 
+  // Initialize from URL
   useEffect(() => {
-    fetchCandidates();
-  }, [fetchCandidates]);
+    const init = async () => {
+      const candidatesList = await fetchCandidates();
+      const params = new URLSearchParams(window.location.search);
+      const candidateId = params.get('candidate');
+      if (candidateId && candidatesList.length > 0) {
+        const candidate = candidatesList.find(c => c.id === parseInt(candidateId));
+        if (candidate) {
+          setSelectedCandidate(candidate);
+          setShowDetailModal(true);
+          try {
+            const matchRes = await candidatesApi.getMatches(candidate.id);
+            setCandidateMatches(matchRes.data);
+          } catch (err) {
+            console.error('Failed to fetch matches:', err);
+          }
+        }
+      }
+    };
+    init();
+  }, []);
+
+  // Update URL when selection changes
+  const isInitialMount = React.useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    updateUrl(showDetailModal ? selectedCandidate?.id : null);
+  }, [selectedCandidate?.id, showDetailModal]);
 
   // Handle navigation from job matches screen
   useEffect(() => {
@@ -1779,6 +1910,13 @@ function InterviewsView({ showToast }) {
   const [selectedJob, setSelectedJob] = useState(null);
   const [expandedInterview, setExpandedInterview] = useState(null);
 
+  // URL state management
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', 'interviews');
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -2188,49 +2326,61 @@ function WalkInsView({ showToast }) {
   const [expandedDriveInterview, setExpandedDriveInterview] = useState(null);
   const [answersCandidate, setAnswersCandidate] = useState(null);
 
-  // Read URL params on mount
+  // URL state helper
+  const updateUrl = (driveId, tab) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', 'walk-ins');
+    if (driveId) {
+      params.set('drive', driveId);
+      params.set('tab', tab || 'details');
+    } else {
+      params.delete('drive');
+      params.delete('tab');
+    }
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+  };
+
+  // Initialize from URL and fetch data
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const driveId = params.get('drive');
     const tab = params.get('tab');
 
-    fetchData().then(() => {
+    const init = async () => {
+      await fetchData();
+      // After data loads, restore state from URL
       if (driveId) {
-        // Will be handled after drives are loaded
-        window._pendingDriveId = parseInt(driveId);
-        window._pendingTab = tab;
-      }
-    });
-  }, []);
-
-  // Handle pending drive selection after data loads
-  useEffect(() => {
-    if (!loading && drives.length > 0 && window._pendingDriveId) {
-      const drive = drives.find(d => d.id === window._pendingDriveId);
-      if (drive) {
-        handleSelectDrive(drive);
-        if (window._pendingTab) {
-          setDriveView(window._pendingTab);
+        const drivesRes = await walkinApi.list();
+        const drive = drivesRes.data.find(d => d.id === parseInt(driveId));
+        if (drive) {
+          setSelectedDrive(drive);
+          setDriveView(tab || 'details');
+          // Fetch drive-specific data
+          const [regsRes, statsRes] = await Promise.all([
+            walkinApi.getRegistrations(drive.id),
+            walkinApi.getStats(drive.id),
+          ]);
+          setRegistrations(regsRes.data);
+          setStats(statsRes.data);
+          if (drive.test_enabled) {
+            const lbRes = await walkinApi.getLeaderboard(drive.id);
+            setLeaderboard(lbRes.data);
+          }
         }
       }
-      delete window._pendingDriveId;
-      delete window._pendingTab;
-    }
-  }, [loading, drives]);
+    };
+    init();
+  }, []);
 
-  // Update URL when drive or tab changes
+  // Update URL when state changes (but not on initial load)
+  const isInitialMount = React.useRef(true);
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (selectedDrive) {
-      params.set('drive', selectedDrive.id);
-      params.set('tab', driveView);
-    } else {
-      params.delete('drive');
-      params.delete('tab');
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
     }
-    const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
-    window.history.replaceState({}, '', newUrl);
-  }, [selectedDrive, driveView]);
+    updateUrl(selectedDrive?.id, driveView);
+  }, [selectedDrive?.id, driveView]);
 
   // Auto-refresh drive data every 30 seconds when a drive is selected and ongoing
   useEffect(() => {
@@ -4281,6 +4431,13 @@ function GitHubView({ showToast }) {
   const [analyzeJobId, setAnalyzeJobId] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzedProfile, setAnalyzedProfile] = useState(null);
+
+  // URL state management
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', 'github');
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+  }, []);
 
   useEffect(() => {
     jobsApi.list().then(res => setJobs(res.data)).catch(console.error);
