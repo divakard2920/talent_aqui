@@ -2188,9 +2188,60 @@ function WalkInsView({ showToast }) {
   const [expandedDriveInterview, setExpandedDriveInterview] = useState(null);
   const [answersCandidate, setAnswersCandidate] = useState(null);
 
+  // Read URL params on mount
   useEffect(() => {
-    fetchData();
+    const params = new URLSearchParams(window.location.search);
+    const driveId = params.get('drive');
+    const tab = params.get('tab');
+
+    fetchData().then(() => {
+      if (driveId) {
+        // Will be handled after drives are loaded
+        window._pendingDriveId = parseInt(driveId);
+        window._pendingTab = tab;
+      }
+    });
   }, []);
+
+  // Handle pending drive selection after data loads
+  useEffect(() => {
+    if (!loading && drives.length > 0 && window._pendingDriveId) {
+      const drive = drives.find(d => d.id === window._pendingDriveId);
+      if (drive) {
+        handleSelectDrive(drive);
+        if (window._pendingTab) {
+          setDriveView(window._pendingTab);
+        }
+      }
+      delete window._pendingDriveId;
+      delete window._pendingTab;
+    }
+  }, [loading, drives]);
+
+  // Update URL when drive or tab changes
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (selectedDrive) {
+      params.set('drive', selectedDrive.id);
+      params.set('tab', driveView);
+    } else {
+      params.delete('drive');
+      params.delete('tab');
+    }
+    const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+    window.history.replaceState({}, '', newUrl);
+  }, [selectedDrive, driveView]);
+
+  // Auto-refresh drive data every 30 seconds when a drive is selected and ongoing
+  useEffect(() => {
+    if (!selectedDrive || selectedDrive.status === 'completed' || selectedDrive.status === 'draft') return;
+
+    const interval = setInterval(() => {
+      refreshCurrentDrive();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [selectedDrive?.id, selectedDrive?.status, driveView]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -2205,6 +2256,38 @@ function WalkInsView({ showToast }) {
       console.error('Failed to fetch data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Refresh current drive data without full page reload
+  const refreshCurrentDrive = async (driveId) => {
+    const id = driveId || selectedDrive?.id;
+    if (!id) return;
+
+    try {
+      const [driveRes, regsRes, statsRes] = await Promise.all([
+        walkinApi.get(id),
+        walkinApi.getRegistrations(id),
+        walkinApi.getStats(id),
+      ]);
+
+      setSelectedDrive(driveRes.data);
+      setDrives(prev => prev.map(d => d.id === driveRes.data.id ? driveRes.data : d));
+      setRegistrations(regsRes.data);
+      setStats(statsRes.data);
+
+      if (driveRes.data.test_enabled) {
+        const lbRes = await walkinApi.getLeaderboard(id);
+        setLeaderboard(lbRes.data);
+      }
+
+      // Refresh interviews if on interviews tab
+      if (driveView === 'interviews') {
+        const intRes = await walkinApi.getInterviews(id);
+        setDriveInterviews(intRes.data);
+      }
+    } catch (err) {
+      console.error('Failed to refresh drive data:', err);
     }
   };
 
@@ -2486,16 +2569,26 @@ function WalkInsView({ showToast }) {
                 {job?.title} • {new Date(selectedDrive.drive_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             </div>
-            <span style={{
-              padding: '6px 16px',
-              borderRadius: '20px',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              background: `${getStatusColor(selectedDrive.status)}20`,
-              color: getStatusColor(selectedDrive.status),
-            }}>
-              {selectedDrive.status.replace('_', ' ').toUpperCase()}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button
+                onClick={() => refreshCurrentDrive()}
+                className="btn-pill"
+                style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="Refresh drive data"
+              >
+                <RefreshCw size={14} /> Refresh
+              </button>
+              <span style={{
+                padding: '6px 16px',
+                borderRadius: '20px',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                background: `${getStatusColor(selectedDrive.status)}20`,
+                color: getStatusColor(selectedDrive.status),
+              }}>
+                {selectedDrive.status.replace('_', ' ').toUpperCase()}
+              </span>
+            </div>
           </div>
 
           {/* Stats */}
@@ -2558,13 +2651,18 @@ function WalkInsView({ showToast }) {
               </button>
             )}
             {selectedDrive.status === 'ongoing' && (
-              <button className="btn-pill" onClick={() => handleUpdateStatus('completed')}>
-                Complete Drive
-              </button>
+              <>
+                <button className="btn-pill" onClick={() => handleUpdateStatus('registration_closed')}>
+                  Close Registration
+                </button>
+                <button className="btn-pill" onClick={() => handleUpdateStatus('completed')}>
+                  Complete Drive
+                </button>
+              </>
             )}
 
             {/* Copy registration link - only show when registration is open */}
-            {selectedDrive.registration_slug && selectedDrive.status === 'registration_open' && (
+            {selectedDrive.registration_slug && (selectedDrive.status === 'registration_open' || selectedDrive.status === 'ongoing') && (
               <button
                 className="btn-pill"
                 onClick={() => {
