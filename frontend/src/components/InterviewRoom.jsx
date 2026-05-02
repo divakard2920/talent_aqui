@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, Phone, PhoneOff, Loader2, Volume2, User, Send, MessageSquare } from 'lucide-react';
 import { interviewApi } from '../services/api';
 
-const INTERVIEWER_NAME = "Arun";
+const INTERVIEWER_NAME = "Devin";
 
 export function InterviewRoom({ interview, candidate, job, onComplete, onClose }) {
   const [status, setStatus] = useState('ready'); // ready, starting, active, processing, completed
@@ -113,7 +113,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
         timestamp: new Date().toISOString(),
       }]);
 
-      // Add Arun's response
+      // Add Devin's response
       setTranscript(prev => [...prev, {
         role: 'ai',
         content: res.data.ai_message,
