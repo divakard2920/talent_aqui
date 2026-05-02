@@ -36,6 +36,7 @@ class DriveUpdate(BaseModel):
     test_duration_minutes: Optional[int] = None
     passing_score_percent: Optional[int] = None
     status: Optional[str] = None
+    is_registration_open: Optional[bool] = None
 
 
 class DriveResponse(BaseModel):
@@ -51,6 +52,7 @@ class DriveResponse(BaseModel):
     passing_score_percent: int
     question_bank: Optional[list] = None
     status: str
+    is_registration_open: bool = True
     registration_slug: Optional[str] = None
     created_at: datetime
     updated_at: datetime

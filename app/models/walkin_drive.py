@@ -71,6 +71,7 @@ class WalkInDrive(Base):
 
     # Status
     status = Column(String(30), default=DriveStatus.DRAFT.value)
+    is_registration_open = Column(Boolean, default=True)  # Track registration independently of drive status
 
     # Registration link (unique slug)
     registration_slug = Column(String(50), unique=True, nullable=True)

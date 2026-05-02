@@ -2777,6 +2777,18 @@ function WalkInsView({ showToast }) {
               }}>
                 {selectedDrive.status.replace('_', ' ').toUpperCase()}
               </span>
+              {selectedDrive.status === 'ongoing' && selectedDrive.is_registration_open === false && (
+                <span style={{
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  background: '#FEE2E2',
+                  color: '#991B1B',
+                }}>
+                  Registration Closed
+                </span>
+              )}
             </div>
           </div>
 
@@ -2835,14 +2847,33 @@ function WalkInsView({ showToast }) {
               </>
             )}
             {selectedDrive.status === 'registration_closed' && (
-              <button className="btn-sarvam" onClick={() => handleUpdateStatus('ongoing')}>
-                <Play size={16} /> Start Drive
-              </button>
+              <>
+                <button className="btn-sarvam" onClick={() => handleUpdateStatus('ongoing')}>
+                  <Play size={16} /> Start Drive
+                </button>
+                <button className="btn-pill" onClick={() => handleUpdateStatus('registration_open')}>
+                  Re-open Registration
+                </button>
+              </>
             )}
             {selectedDrive.status === 'ongoing' && (
               <>
-                <button className="btn-pill" onClick={() => handleUpdateStatus('registration_closed')}>
-                  Close Registration
+                <button
+                  className="btn-pill"
+                  onClick={async () => {
+                    try {
+                      const res = await walkinApi.update(selectedDrive.id, {
+                        is_registration_open: !selectedDrive.is_registration_open
+                      });
+                      setSelectedDrive(res.data);
+                      setDrives(prev => prev.map(d => d.id === res.data.id ? res.data : d));
+                      showToast(res.data.is_registration_open ? 'Registration opened' : 'Registration closed');
+                    } catch (err) {
+                      showToast('Failed to update registration status', 'error');
+                    }
+                  }}
+                >
+                  {selectedDrive.is_registration_open !== false ? 'Close Registration' : 'Open Registration'}
                 </button>
                 <button className="btn-pill" onClick={() => handleUpdateStatus('completed')}>
                   Complete Drive
@@ -2851,7 +2882,7 @@ function WalkInsView({ showToast }) {
             )}
 
             {/* Copy registration link - only show when registration is open */}
-            {selectedDrive.registration_slug && (selectedDrive.status === 'registration_open' || selectedDrive.status === 'ongoing') && (
+            {selectedDrive.registration_slug && (selectedDrive.status === 'registration_open' || (selectedDrive.status === 'ongoing' && selectedDrive.is_registration_open !== false)) && (
               <button
                 className="btn-pill"
                 onClick={() => {
@@ -3015,7 +3046,7 @@ function WalkInsView({ showToast }) {
               <h3 style={{ margin: '0 0 16px' }}>Front Desk - Walk-in Registration</h3>
 
               {/* Show message if registration is not open */}
-              {!['registration_open', 'ongoing'].includes(selectedDrive.status) && (
+              {(selectedDrive.status === 'draft' || selectedDrive.status === 'registration_closed' || selectedDrive.status === 'completed' || selectedDrive.status === 'cancelled' || (selectedDrive.status === 'ongoing' && selectedDrive.is_registration_open === false)) && (
                 <div style={{
                   background: '#FEF3C7',
                   border: '1px solid #F59E0B',
@@ -3029,11 +3060,12 @@ function WalkInsView({ showToast }) {
                     {selectedDrive.status === 'registration_closed' && 'Registration is closed.'}
                     {selectedDrive.status === 'completed' && 'Drive has been completed.'}
                     {selectedDrive.status === 'cancelled' && 'Drive has been cancelled.'}
+                    {selectedDrive.status === 'ongoing' && selectedDrive.is_registration_open === false && 'Registration is closed for this drive.'}
                   </p>
                 </div>
               )}
 
-              {['registration_open', 'ongoing'].includes(selectedDrive.status) && lastToken && (
+              {(selectedDrive.status === 'registration_open' || (selectedDrive.status === 'ongoing' && selectedDrive.is_registration_open !== false)) && lastToken && (
                 <div style={{
                   background: '#E8F5E9',
                   border: '2px solid #4CAF50',
@@ -3060,7 +3092,7 @@ function WalkInsView({ showToast }) {
                 </div>
               )}
 
-              {['registration_open', 'ongoing'].includes(selectedDrive.status) && !lastToken && (
+              {(selectedDrive.status === 'registration_open' || (selectedDrive.status === 'ongoing' && selectedDrive.is_registration_open !== false)) && !lastToken && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div>
                     <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.85rem', fontWeight: 500 }}>Full Name *</label>
