@@ -24,7 +24,7 @@ class InterviewEngine:
         self.job_context = None
         self.candidate_context = None
         self.company_name = "Our Company"  # Can be configured
-        self.interviewer_name = "Arun"  # Human interviewer persona
+        self.interviewer_name = "Devin"  # Human interviewer persona
 
     def initialize(
         self,

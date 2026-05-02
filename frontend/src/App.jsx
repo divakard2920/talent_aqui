@@ -166,10 +166,19 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Check for candidate test mode via URL parameter
+  // Check for special routes
   const urlParams = new URLSearchParams(window.location.search);
   const testDriveId = urlParams.get('test');
   const interviewId = urlParams.get('interview');
+
+  // Check for registration route: /register/{slug}
+  const pathMatch = window.location.pathname.match(/^\/register\/(.+)$/);
+  const registrationSlug = pathMatch ? pathMatch[1] : null;
+
+  // If in registration mode, show registration portal
+  if (registrationSlug) {
+    return <CandidateRegistrationPortal slug={registrationSlug} />;
+  }
 
   // If in test mode, show candidate test portal
   if (testDriveId) {
@@ -1751,7 +1760,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
               <div style={{ background: 'linear-gradient(135deg, #E8EEF8 0%, #F0F4F8 100%)', padding: '16px', borderRadius: '16px', border: '1px solid var(--border-light)' }}>
                 <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: 'var(--brand-navy)' }}>Schedule L1 Screening Call</h4>
                 <p style={{ margin: '0 0 12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Connect this candidate with Arun for an initial screening call
+                  Connect this candidate with Devin for an initial screening call
                 </p>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {jobs.filter(j => j.status === 'open').map(job => (
@@ -1976,7 +1985,7 @@ function InterviewsView({ showToast }) {
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Screening Interviews</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>
-          L1 screening calls conducted by Arun
+          L1 screening calls conducted by Devin
         </p>
       </div>
 
@@ -3363,7 +3372,7 @@ function WalkInsView({ showToast }) {
         {driveView === 'interviews' && (
           <div className="sovereign-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0 }}>L1 Interviews with Arun</h3>
+              <h3 style={{ margin: 0 }}>L1 Interviews with Devin</h3>
               <button
                 onClick={async () => {
                   setLoadingInterviews(true);
@@ -3661,7 +3670,7 @@ function WalkInsView({ showToast }) {
                 padding: '16px',
               }}>
                 <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: selectedCandidate.interview_status === 'completed' ? '#4F46E5' : '#92400E' }}>
-                  L1 Interview with Arun
+                  L1 Interview with Devin
                 </h4>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                   {selectedCandidate.interview_status === 'completed' ? (
@@ -4740,7 +4749,7 @@ function GitHubView({ showToast }) {
   );
 }
 
-// --- Interview Portal (for candidates taking L1 interview with Arun) ---
+// --- Interview Portal (for candidates taking L1 interview with Devin) ---
 function InterviewPortal({ interviewId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -4848,7 +4857,7 @@ function InterviewPortal({ interviewId }) {
           <CheckCircle size={64} style={{ color: '#10B981', marginBottom: '20px' }} />
           <h2 style={{ margin: '0 0 12px', fontSize: '1.8rem' }}>Interview Complete!</h2>
           <p style={{ color: '#6B7280', margin: '0 0 16px', fontSize: '1.1rem' }}>
-            Thank you for completing your interview with Arun.
+            Thank you for completing your interview with Devin.
           </p>
           <p style={{ color: '#9CA3AF', fontSize: '0.9rem', margin: 0 }}>
             Our team will review your interview and get back to you soon.
@@ -5420,7 +5429,7 @@ function CandidateTestPortal({ driveId }) {
                   <CheckCircle size={24} /> Interview Completed!
                 </h3>
                 <p style={{ margin: 0, color: '#166534' }}>
-                  Thank you for completing your interview with Arun. Our team will review your interview and get back to you soon.
+                  Thank you for completing your interview with Devin. Our team will review your interview and get back to you soon.
                 </p>
               </div>
             )}
@@ -5436,8 +5445,8 @@ function CandidateTestPortal({ driveId }) {
                 <h3 style={{ margin: '0 0 12px', color: '#166534' }}>You've been Shortlisted!</h3>
                 <p style={{ margin: '0 0 16px', color: '#166534' }}>
                   {candidate?.interview_status
-                    ? 'Continue your Level 1 Interview with Arun.'
-                    : 'Congratulations! You are now eligible for Level 1 Interview with Arun.'}
+                    ? 'Continue your Level 1 Interview with Devin.'
+                    : 'Congratulations! You are now eligible for Level 1 Interview with Devin.'}
                 </p>
                 <button
                   onClick={async () => {
@@ -5470,7 +5479,7 @@ function CandidateTestPortal({ driveId }) {
                   }}
                 >
                   {loading ? <Loader2 size={18} className="spin" /> : <Phone size={18} />}
-                  {loading ? 'Loading...' : (candidate?.interview_status ? 'Resume Interview with Arun' : 'Start Interview with Arun')}
+                  {loading ? 'Loading...' : (candidate?.interview_status ? 'Resume Interview with Devin' : 'Start Interview with Devin')}
                 </button>
               </div>
             )}
