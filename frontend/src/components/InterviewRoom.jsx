@@ -459,7 +459,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
               fontSize: entry.role === 'ai' ? '0.9rem' : undefined,
               fontWeight: entry.role === 'ai' ? 600 : undefined,
             }}>
-              {entry.role === 'ai' ? 'A' : <User size={18} />}
+              {entry.role === 'ai' ? INTERVIEWER_NAME.charAt(0) : <User size={18} />}
             </div>
             <div style={{
               maxWidth: '70%',
