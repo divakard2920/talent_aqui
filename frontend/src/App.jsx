@@ -2334,6 +2334,7 @@ function WalkInsView({ showToast }) {
   const [loadingInterviews, setLoadingInterviews] = useState(false);
   const [expandedDriveInterview, setExpandedDriveInterview] = useState(null);
   const [answersCandidate, setAnswersCandidate] = useState(null);
+  const [processingInterviewAction, setProcessingInterviewAction] = useState(null);
 
   // URL state helper
   const updateUrl = (driveId, tab) => {
@@ -3546,6 +3547,131 @@ function WalkInsView({ showToast }) {
                             <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Enthusiasm:</span>
                               <span style={{ fontWeight: 600, color: 'var(--brand-navy)' }}>{Math.round(evaluation.enthusiasm_score)}</span>
+                            </div>
+                          )}
+
+                          {/* HR Action Buttons */}
+                          {interview.registration_id && interview.status === 'completed' && (
+                            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-light)' }}>
+                              <p style={{ margin: '0 0 8px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>HR Decision</p>
+                              {interview.registration_status === 'approved_l2' ? (
+                                <span style={{ padding: '6px 12px', background: '#DCFCE7', color: '#166534', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>
+                                  Approved for L2
+                                </span>
+                              ) : interview.registration_status === 'rejected' ? (
+                                <span style={{ padding: '6px 12px', background: '#FEE2E2', color: '#991B1B', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>
+                                  Rejected
+                                </span>
+                              ) : interview.registration_status === 'on_hold' ? (
+                                <span style={{ padding: '6px 12px', background: '#FEF3C7', color: '#92400E', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>
+                                  On Hold
+                                </span>
+                              ) : (
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      setProcessingInterviewAction(interview.id);
+                                      try {
+                                        await walkinApi.approveL2(selectedDrive.id, interview.registration_id);
+                                        showToast('Candidate approved for L2 interview');
+                                        // Refresh interviews
+                                        const res = await walkinApi.getInterviews(selectedDrive.id);
+                                        setDriveInterviews(res.data);
+                                      } catch (err) {
+                                        showToast(err.response?.data?.detail || 'Failed to approve', 'error');
+                                      } finally {
+                                        setProcessingInterviewAction(null);
+                                      }
+                                    }}
+                                    disabled={processingInterviewAction === interview.id}
+                                    style={{
+                                      padding: '8px 16px',
+                                      background: processingInterviewAction === interview.id ? '#9CA3AF' : '#166534',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      fontSize: '0.8rem',
+                                      fontWeight: 600,
+                                      cursor: processingInterviewAction === interview.id ? 'not-allowed' : 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '6px',
+                                    }}
+                                  >
+                                    {processingInterviewAction === interview.id ? <Loader2 size={14} className="spin" /> : <CheckCircle size={14} />}
+                                    Approve for L2
+                                  </button>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      setProcessingInterviewAction(interview.id);
+                                      try {
+                                        await walkinApi.rejectAfterInterview(selectedDrive.id, interview.registration_id);
+                                        showToast('Candidate rejected');
+                                        // Refresh interviews
+                                        const res = await walkinApi.getInterviews(selectedDrive.id);
+                                        setDriveInterviews(res.data);
+                                      } catch (err) {
+                                        showToast(err.response?.data?.detail || 'Failed to reject', 'error');
+                                      } finally {
+                                        setProcessingInterviewAction(null);
+                                      }
+                                    }}
+                                    disabled={processingInterviewAction === interview.id}
+                                    style={{
+                                      padding: '8px 16px',
+                                      background: processingInterviewAction === interview.id ? '#9CA3AF' : '#DC2626',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      fontSize: '0.8rem',
+                                      fontWeight: 600,
+                                      cursor: processingInterviewAction === interview.id ? 'not-allowed' : 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '6px',
+                                    }}
+                                  >
+                                    {processingInterviewAction === interview.id ? <Loader2 size={14} className="spin" /> : <XCircle size={14} />}
+                                    Reject
+                                  </button>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      setProcessingInterviewAction(interview.id);
+                                      try {
+                                        await walkinApi.holdCandidate(selectedDrive.id, interview.registration_id);
+                                        showToast('Candidate put on hold');
+                                        // Refresh interviews
+                                        const res = await walkinApi.getInterviews(selectedDrive.id);
+                                        setDriveInterviews(res.data);
+                                      } catch (err) {
+                                        showToast(err.response?.data?.detail || 'Failed to update status', 'error');
+                                      } finally {
+                                        setProcessingInterviewAction(null);
+                                      }
+                                    }}
+                                    disabled={processingInterviewAction === interview.id}
+                                    style={{
+                                      padding: '8px 16px',
+                                      background: processingInterviewAction === interview.id ? '#9CA3AF' : '#D97706',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      fontSize: '0.8rem',
+                                      fontWeight: 600,
+                                      cursor: processingInterviewAction === interview.id ? 'not-allowed' : 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '6px',
+                                    }}
+                                  >
+                                    {processingInterviewAction === interview.id ? <Loader2 size={14} className="spin" /> : <Clock size={14} />}
+                                    On Hold
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -5417,7 +5543,7 @@ function CandidateTestPortal({ driveId }) {
             </p>
 
             {/* Status-specific next steps */}
-            {candidate?.status === 'shortlisted' && candidate?.interview_status === 'completed' && (
+            {candidate?.status === 'approved_l2' && (
               <div style={{
                 marginTop: '32px',
                 padding: '20px',
@@ -5426,10 +5552,27 @@ function CandidateTestPortal({ driveId }) {
                 borderRadius: '12px',
               }}>
                 <h3 style={{ margin: '0 0 12px', color: '#166534', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <CheckCircle size={24} /> Interview Completed!
+                  <CheckCircle size={24} /> Congratulations! You've been selected for L2 Interview
                 </h3>
                 <p style={{ margin: 0, color: '#166534' }}>
-                  Thank you for completing your interview with Devin. Our team will review your interview and get back to you soon.
+                  You have successfully cleared the L1 interview with Devin. Our HR team will contact you shortly to schedule your L2 interview.
+                </p>
+              </div>
+            )}
+
+            {candidate?.status === 'shortlisted' && candidate?.interview_status === 'completed' && (
+              <div style={{
+                marginTop: '32px',
+                padding: '20px',
+                background: '#EEF2FF',
+                border: '1px solid #6366F1',
+                borderRadius: '12px',
+              }}>
+                <h3 style={{ margin: '0 0 12px', color: '#4338CA', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Clock size={24} /> Interview Completed - Under Review
+                </h3>
+                <p style={{ margin: 0, color: '#4338CA' }}>
+                  Thank you for completing your interview with Devin. Our team is reviewing your interview and will update you shortly.
                 </p>
               </div>
             )}
@@ -5499,7 +5642,25 @@ function CandidateTestPortal({ driveId }) {
               </div>
             )}
 
-            {candidate?.status !== 'shortlisted' && candidate?.status !== 'rejected' && (
+            {candidate?.status === 'on_hold' && (
+              <div style={{
+                marginTop: '32px',
+                padding: '20px',
+                background: '#FEF3C7',
+                border: '1px solid #F59E0B',
+                borderRadius: '12px',
+              }}>
+                <h3 style={{ margin: '0 0 12px', color: '#92400E', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Clock size={24} /> Your Application is On Hold
+                </h3>
+                <p style={{ margin: 0, color: '#92400E' }}>
+                  Your interview has been reviewed. Our HR team has placed your application on hold for further consideration.
+                  Please check back later or contact the HR desk for more information.
+                </p>
+              </div>
+            )}
+
+            {candidate?.status !== 'shortlisted' && candidate?.status !== 'rejected' && candidate?.status !== 'approved_l2' && candidate?.status !== 'on_hold' && (
               <div style={{
                 marginTop: '32px',
                 padding: '20px',

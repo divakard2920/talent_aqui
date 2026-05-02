@@ -1215,7 +1215,7 @@ async def get_drive_interviews(
     )
     interviews = result.scalars().all()
 
-    # Build response with candidate info
+    # Build response with candidate info and registration info
     response = []
     for interview in interviews:
         # Get candidate details
@@ -1229,6 +1229,15 @@ async def get_drive_interviews(
             select(Job).where(Job.id == interview.job_id)
         )
         job = job_result.scalar_one_or_none()
+
+        # Get registration details for this candidate in this drive
+        reg_result = await db.execute(
+            select(DriveRegistration).where(
+                DriveRegistration.drive_id == drive_id,
+                DriveRegistration.candidate_id == interview.candidate_id,
+            )
+        )
+        registration = reg_result.scalar_one_or_none()
 
         response.append({
             "id": interview.id,
@@ -1251,6 +1260,78 @@ async def get_drive_interviews(
                 "id": job.id,
                 "title": job.title,
             } if job else None,
+            "registration_id": registration.id if registration else None,
+            "registration_status": registration.status if registration else None,
         })
 
     return response
+
+
+@router.post("/{drive_id}/registrations/{registration_id}/approve-l2")
+async def approve_for_l2(
+    drive_id: int,
+    registration_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Approve a candidate for L2 interview after completing L1."""
+    result = await db.execute(
+        select(DriveRegistration).where(
+            DriveRegistration.id == registration_id,
+            DriveRegistration.drive_id == drive_id,
+        )
+    )
+    registration = result.scalar_one_or_none()
+    if not registration:
+        raise HTTPException(status_code=404, detail="Registration not found")
+
+    # Update status to indicate approved for L2
+    registration.status = "approved_l2"
+    await db.commit()
+
+    return {"status": "approved_l2", "message": "Candidate approved for L2 interview"}
+
+
+@router.post("/{drive_id}/registrations/{registration_id}/reject-after-interview")
+async def reject_after_interview(
+    drive_id: int,
+    registration_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reject a candidate after L1 interview."""
+    result = await db.execute(
+        select(DriveRegistration).where(
+            DriveRegistration.id == registration_id,
+            DriveRegistration.drive_id == drive_id,
+        )
+    )
+    registration = result.scalar_one_or_none()
+    if not registration:
+        raise HTTPException(status_code=404, detail="Registration not found")
+
+    registration.status = RegistrationStatus.REJECTED.value
+    await db.commit()
+
+    return {"status": "rejected", "message": "Candidate rejected"}
+
+
+@router.post("/{drive_id}/registrations/{registration_id}/hold")
+async def hold_candidate(
+    drive_id: int,
+    registration_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Put a candidate on hold after L1 interview."""
+    result = await db.execute(
+        select(DriveRegistration).where(
+            DriveRegistration.id == registration_id,
+            DriveRegistration.drive_id == drive_id,
+        )
+    )
+    registration = result.scalar_one_or_none()
+    if not registration:
+        raise HTTPException(status_code=404, detail="Registration not found")
+
+    registration.status = "on_hold"
+    await db.commit()
+
+    return {"status": "on_hold", "message": "Candidate put on hold"}

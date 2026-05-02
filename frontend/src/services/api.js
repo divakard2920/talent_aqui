@@ -129,6 +129,12 @@ export const walkinApi = {
     api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/reject`),
   startInterview: (driveId, registrationId) =>
     api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/start-interview`),
+  approveL2: (driveId, registrationId) =>
+    api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/approve-l2`),
+  rejectAfterInterview: (driveId, registrationId) =>
+    api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/reject-after-interview`),
+  holdCandidate: (driveId, registrationId) =>
+    api.post(`/walkin-drives/${driveId}/registrations/${registrationId}/hold`),
 };
 
 export default api;
