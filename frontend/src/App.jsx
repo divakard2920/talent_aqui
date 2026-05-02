@@ -2347,26 +2347,55 @@ function WalkInsView({ showToast }) {
     const tab = params.get('tab');
 
     const init = async () => {
-      await fetchData();
-      // After data loads, restore state from URL
-      if (driveId) {
-        const drivesRes = await walkinApi.list();
-        const drive = drivesRes.data.find(d => d.id === parseInt(driveId));
-        if (drive) {
-          setSelectedDrive(drive);
-          setDriveView(tab || 'details');
-          // Fetch drive-specific data
-          const [regsRes, statsRes] = await Promise.all([
-            walkinApi.getRegistrations(drive.id),
-            walkinApi.getStats(drive.id),
-          ]);
-          setRegistrations(regsRes.data);
-          setStats(statsRes.data);
-          if (drive.test_enabled) {
-            const lbRes = await walkinApi.getLeaderboard(drive.id);
-            setLeaderboard(lbRes.data);
+      // Fetch drives and jobs once
+      setLoading(true);
+      try {
+        const [drivesRes, jobsRes] = await Promise.all([
+          walkinApi.list(),
+          jobsApi.list(),
+        ]);
+        setDrives(drivesRes.data);
+        setJobs(jobsRes.data);
+
+        // If drive ID in URL, restore that state
+        if (driveId) {
+          const drive = drivesRes.data.find(d => d.id === parseInt(driveId));
+          if (drive) {
+            setSelectedDrive(drive);
+            setDriveView(tab || 'details');
+
+            // Fetch drive-specific data in parallel
+            const fetchPromises = [
+              walkinApi.getRegistrations(drive.id),
+              walkinApi.getStats(drive.id),
+            ];
+            if (drive.test_enabled) {
+              fetchPromises.push(walkinApi.getLeaderboard(drive.id));
+            }
+            if (tab === 'interviews') {
+              setLoadingInterviews(true);
+              fetchPromises.push(walkinApi.getInterviews(drive.id));
+            }
+
+            const results = await Promise.all(fetchPromises);
+            setRegistrations(results[0].data);
+            setStats(results[1].data);
+
+            let resultIndex = 2;
+            if (drive.test_enabled) {
+              setLeaderboard(results[resultIndex].data);
+              resultIndex++;
+            }
+            if (tab === 'interviews') {
+              setDriveInterviews(results[resultIndex].data);
+              setLoadingInterviews(false);
+            }
           }
         }
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+      } finally {
+        setLoading(false);
       }
     };
     init();
