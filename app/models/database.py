@@ -24,6 +24,13 @@ async def init_db():
     from app.models.candidate import Candidate, CandidateJobMatch
     from app.models.interview import Interview
     from app.models.walkin_drive import WalkInDrive, DriveRegistration
+    from sqlalchemy import text
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # Add missing columns (simple migration for SQLite)
+        try:
+            await conn.execute(text("ALTER TABLE walkin_drives ADD COLUMN is_registration_open BOOLEAN DEFAULT 1"))
+        except Exception:
+            pass  # Column already exists
