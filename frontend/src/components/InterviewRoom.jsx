@@ -431,7 +431,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
               fontSize: '1.5rem',
               fontWeight: 600,
               margin: '0 auto 16px',
-            }}>A</div>
+            }}>{INTERVIEWER_NAME.charAt(0)}</div>
             <p>Click "Start Call" to connect with {INTERVIEWER_NAME} for your screening.</p>
           </div>
         )}
