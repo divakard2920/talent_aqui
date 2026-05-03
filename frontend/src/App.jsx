@@ -650,6 +650,13 @@ function JobsView({ showToast, onViewCandidate }) {
         <title>Screening Results - ${selectedJob.title}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
+          .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #1E3A5F; }
+          .header-left { display: flex; align-items: center; gap: 12px; }
+          .header-left img { height: 40px; }
+          .header-left span { font-size: 18px; font-weight: 600; color: #1E3A5F; }
+          .header-right { display: flex; align-items: center; gap: 4px; }
+          .header-right img { height: 36px; }
+          .header-right span { font-size: 20px; font-weight: 700; color: #1E3A5F; }
           h1 { color: #1E3A5F; margin-bottom: 8px; }
           .subtitle { color: #666; margin-bottom: 24px; }
           .summary { display: flex; gap: 32px; margin-bottom: 32px; padding: 20px; background: #f5f5f5; border-radius: 8px; }
@@ -673,6 +680,16 @@ function JobsView({ showToast, onViewCandidate }) {
         </style>
       </head>
       <body>
+        <div class="header">
+          <div class="header-left">
+            <img src="${knorrLogo}" alt="Knorr-Bremse" />
+            <span>Knorr-Bremse</span>
+          </div>
+          <div class="header-right">
+            <img src="${falconFLogo}" alt="Falcon" />
+            <span>alcon</span>
+          </div>
+        </div>
         <h1>Screening Results</h1>
         <p class="subtitle">${selectedJob.title} • ${selectedJob.department || ''} • ${selectedJob.location || 'Remote'}</p>
 
@@ -726,7 +743,7 @@ function JobsView({ showToast, onViewCandidate }) {
         </table>
 
         <div class="footer">
-          Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })} • Confidential - Knorr-Bremse
         </div>
       </body>
       </html>
