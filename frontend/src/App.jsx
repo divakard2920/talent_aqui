@@ -230,15 +230,28 @@ function App() {
             </span>
             <span style={{ margin: '0 10px', color: '#d1d5db', fontWeight: 300 }}>|</span>
             <span style={{ display: 'flex', alignItems: 'center' }}>
-              <svg width="24" height="24" viewBox="0 0 64 64" fill="#1e3a5f" style={{ marginRight: '2px' }}>
-                {/* Clean falcon head silhouette */}
-                <path d="M16 8 C24 4 36 6 42 14 C44 17 44 20 42 22 L56 26 L42 30 C40 32 36 34 32 34 C28 34 24 32 20 28 L16 32 L16 56 C16 58 14 60 12 60 C10 60 8 58 8 56 L8 20 C8 12 12 8 16 8 Z M32 16 C34 16 36 18 36 20 C36 22 34 24 32 24 C30 24 28 22 28 20 C28 18 30 16 32 16 Z"/>
+              <svg width="32" height="28" viewBox="0 0 48 42" fill="none" style={{ marginRight: '0px' }}>
+                {/* Falcon head with flowing feathers */}
+                {/* Main head shape */}
+                <path d="M20 4 C28 2 34 6 36 12 C37 15 36 18 34 20 L32 22 C30 24 26 26 22 26 C18 26 14 24 10 20 L6 24 L4 28 L2 34 L4 38 L8 40 C6 38 6 34 8 30 L10 26 L12 24 C8 28 6 34 8 38 L4 36 L2 32 L4 26 L8 20 L12 22 C10 26 10 32 14 36 L10 34 L8 28 L10 22 L14 20 C14 24 16 30 20 32 L16 30 L14 26 L16 20 L20 18 C22 22 26 26 30 26 L26 26 L22 24 L22 18 L26 14 L30 12" fill="#3d5a80"/>
+                {/* Head top and crown */}
+                <path d="M18 2 C24 0 32 2 36 8 C38 12 38 16 36 20 C34 18 32 16 30 16 C32 14 32 10 30 8 C28 6 24 4 20 6 C16 8 14 12 14 16 L12 14 C12 8 14 4 18 2 Z" fill="#3d5a80"/>
+                {/* Feathers flowing back */}
+                <path d="M8 22 C4 26 2 32 4 38 L2 36 C0 30 2 24 6 20 L8 22 Z" fill="#3d5a80"/>
+                <path d="M12 24 C8 28 6 34 8 40 L6 38 C4 32 6 26 10 22 L12 24 Z" fill="#2d4a70"/>
+                <path d="M16 22 C12 26 10 32 12 38 L10 36 C8 30 10 24 14 20 L16 22 Z" fill="#3d5a80"/>
+                {/* Beak */}
+                <path d="M36 14 L46 16 L36 20 C37 18 37 16 36 14 Z" fill="#f5a623"/>
+                <path d="M36 16 L44 17 L36 19 Z" fill="#e8940d"/>
+                {/* Eye */}
+                <circle cx="28" cy="10" r="4" fill="#ffffff"/>
+                <circle cx="29" cy="10" r="2" fill="#1a2f4a"/>
               </svg>
               <span style={{
-                fontSize: '1.3rem',
+                fontSize: '1.35rem',
                 fontWeight: 700,
-                color: '#1e3a5f',
-                letterSpacing: '0.02em'
+                color: '#3d5a80',
+                letterSpacing: '0.01em'
               }}>
                 alcon
               </span>
