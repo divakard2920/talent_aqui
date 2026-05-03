@@ -3092,12 +3092,14 @@ function WalkInsView({ showToast }) {
 
           {/* Stats */}
           {stats && (
-            <div style={{ display: 'grid', gridTemplateColumns: selectedDrive.total_capacity ? 'repeat(6, 1fr)' : 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${(selectedDrive.test_enabled ? 3 : 1) + 2 + (selectedDrive.total_capacity ? 1 : 0)}, 1fr)`, gap: '12px', marginBottom: '20px' }}>
               {[
                 { label: 'Registered', value: stats.total_registered, icon: Users },
                 { label: 'Checked In', value: stats.checked_in, icon: UserCheck },
-                { label: 'Tested', value: stats.tested, icon: ClipboardList },
-                { label: 'Passed', value: stats.passed, icon: Trophy },
+                ...(selectedDrive.test_enabled ? [
+                  { label: 'Tested', value: stats.tested, icon: ClipboardList },
+                  { label: 'Passed', value: stats.passed, icon: Trophy },
+                ] : []),
                 { label: 'Shortlisted', value: stats.shortlisted, icon: CheckCircle },
                 ...(selectedDrive.total_capacity ? [{
                   label: 'Capacity',
@@ -3368,7 +3370,7 @@ function WalkInsView({ showToast }) {
                       {reg.token_number && (
                         <span style={{ fontWeight: 600, color: 'var(--brand-navy)' }}>#{reg.token_number}</span>
                       )}
-                      {reg.test_score !== null && (
+                      {selectedDrive.test_enabled && reg.test_score !== null && (
                         <span className={`chip ${reg.test_passed ? 'chip-green' : 'chip-navy'}`}>
                           {Math.round(reg.test_score)}%
                         </span>
@@ -3618,10 +3620,14 @@ function WalkInsView({ showToast }) {
                           fontSize: '0.75rem',
                           padding: '2px 8px',
                           borderRadius: '4px',
-                          background: reg.test_passed === true ? '#4CAF50' : reg.test_passed === false ? '#EF4444' : '#94A3B8',
+                          background: selectedDrive.test_enabled
+                            ? (reg.test_passed === true ? '#4CAF50' : reg.test_passed === false ? '#EF4444' : '#94A3B8')
+                            : '#4CAF50',
                           color: 'white',
                         }}>
-                          {reg.test_score !== null ? `${Math.round(reg.test_score)}%` : reg.status.replace('_', ' ')}
+                          {selectedDrive.test_enabled
+                            ? (reg.test_score !== null ? `${Math.round(reg.test_score)}%` : reg.status.replace('_', ' '))
+                            : reg.status.replace('_', ' ')}
                         </span>
                         <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                           {new Date(reg.checked_in_at + 'Z').toLocaleTimeString()}
@@ -4175,8 +4181,8 @@ function WalkInsView({ showToast }) {
               </div>
             </div>
 
-            {/* Test Results */}
-            {selectedCandidate.test_score !== null && (
+            {/* Test Results - only show if test was enabled for this drive */}
+            {selectedDrive.test_enabled && selectedCandidate.test_score !== null && (
               <div style={{ background: selectedCandidate.test_passed ? '#DCFCE7' : '#FEE2E2', borderRadius: '12px', padding: '16px' }}>
                 <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: selectedCandidate.test_passed ? '#166534' : '#991B1B' }}>Test Results</h4>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
