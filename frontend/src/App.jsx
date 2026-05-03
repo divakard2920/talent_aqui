@@ -2508,24 +2508,31 @@ function WalkInsView({ showToast }) {
       });
       showToast('Walk-in drive created!');
     } catch (err) {
+      console.log('Create drive error:', err.response?.status, err.response?.data);
       // Handle duplicate drive conflict
       if (err.response?.status === 409) {
         const detail = err.response.data.detail;
-        const existingDrive = detail.existing_drive;
-        setConfirmDialog({
-          isOpen: true,
-          title: 'Duplicate Drive Detected',
-          message: `${detail.message}.\n\nExisting drive: "${existingDrive.title}" (${existingDrive.status})\n\nDo you still want to create a new drive?`,
-          type: 'warning',
-          confirmText: 'Create Anyway',
-          onConfirm: async () => {
-            setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-            await handleCreateDrive(true); // Retry with force=true
-          },
-        });
-        return;
+        console.log('409 detail:', detail);
+        if (detail && typeof detail === 'object' && detail.existing_drive) {
+          const existingDrive = detail.existing_drive;
+          setConfirmDialog({
+            isOpen: true,
+            title: 'Duplicate Drive Detected',
+            message: `${detail.message}.\n\nExisting drive: "${existingDrive.title}" (${existingDrive.status})\n\nDo you still want to create a new drive?`,
+            type: 'warning',
+            confirmText: 'Create Anyway',
+            onConfirm: async () => {
+              setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+              await handleCreateDrive(true); // Retry with force=true
+            },
+          });
+          return;
+        }
       }
-      showToast(err.response?.data?.detail || 'Failed to create drive', 'error');
+      const errorMsg = typeof err.response?.data?.detail === 'string'
+        ? err.response.data.detail
+        : err.response?.data?.detail?.message || 'Failed to create drive';
+      showToast(errorMsg, 'error');
     }
   };
 

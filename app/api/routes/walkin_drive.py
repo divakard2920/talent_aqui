@@ -6,6 +6,7 @@ import random
 import string
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
@@ -66,14 +67,16 @@ async def create_drive(
         )
         existing_drive = result.scalar_one_or_none()
         if existing_drive:
-            raise HTTPException(
+            return JSONResponse(
                 status_code=409,
-                detail={
-                    "message": f"A drive for this job already exists on {drive_date}",
-                    "existing_drive": {
-                        "id": existing_drive.id,
-                        "title": existing_drive.title,
-                        "status": existing_drive.status,
+                content={
+                    "detail": {
+                        "message": f"A drive for this job already exists on {drive_date}",
+                        "existing_drive": {
+                            "id": existing_drive.id,
+                            "title": existing_drive.title,
+                            "status": existing_drive.status,
+                        }
                     }
                 }
             )
