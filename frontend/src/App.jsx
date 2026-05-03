@@ -42,6 +42,7 @@ import './index.css';
 import knorrLogo from './assets/knorr.png';
 import falconLogo from './assets/falcon-logo.png';
 import falconHead from './assets/falcon-head.png';
+import falconFLogo from './assets/falcon_flogo.png';
 import { jsPDF } from 'jspdf';
 import { jobsApi, candidatesApi, resumeApi, githubApi, interviewApi, walkinApi } from './services/api';
 import { Modal, JobForm, GitHubSearchForm, GitHubCandidateCard, ResumeUpload, CandidateResult, ConfirmDialog, InterviewRoom } from './components';
@@ -232,8 +233,8 @@ function App() {
             </span>
             <span style={{ margin: '0 10px', color: '#d1d5db', fontWeight: 300 }}>|</span>
             <span style={{ display: 'flex', alignItems: 'center' }}>
-              <img src={falconHead} alt="F" style={{ height: '42px', marginRight: '-4px' }} />
-              <span style={{ fontSize: '1.4rem', fontWeight: 700, color: '#1e3a5f' }}>alcon</span>
+              <img src={falconFLogo} alt="F" style={{ height: '52px', marginRight: '-10px' }} />
+              <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1e3a5f' }}>alcon</span>
             </span>
           </div>
 
@@ -340,7 +341,7 @@ function DashboardView({ onNavigate }) {
     >
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '3.5rem', marginBottom: '1rem', lineHeight: 1.1 }}>
-          Powering your <br />AI-<img src={falconHead} alt="f" style={{ height: '3.5rem', verticalAlign: 'middle', marginBottom: '4px' }} />irst hiring.
+          Powering your <br />AI-<img src={falconFLogo} alt="f" style={{ height: '3.5rem', verticalAlign: 'middle', marginBottom: '4px' }} />irst hiring.
         </h1>
         <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 2rem auto', lineHeight: 1.6 }}>
           Automatically source developers, parse resumes, and discover perfect matches with frontier models.
