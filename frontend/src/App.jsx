@@ -2513,8 +2513,12 @@ function WalkInsView({ showToast }) {
       if (err.response?.status === 409) {
         const detail = err.response.data.detail;
         console.log('409 detail:', detail);
+        console.log('detail type:', typeof detail);
+        console.log('has existing_drive:', detail?.existing_drive);
         if (detail && typeof detail === 'object' && detail.existing_drive) {
           const existingDrive = detail.existing_drive;
+          console.log('Setting confirm dialog...');
+          setShowCreateModal(false); // Close create modal first
           setConfirmDialog({
             isOpen: true,
             title: 'Duplicate Drive Detected',
@@ -2523,6 +2527,7 @@ function WalkInsView({ showToast }) {
             confirmText: 'Create Anyway',
             onConfirm: async () => {
               setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+              setShowCreateModal(true); // Re-open create modal
               await handleCreateDrive(true); // Retry with force=true
             },
           });
