@@ -2586,95 +2586,171 @@ function WalkInsView({ showToast }) {
     }
   };
 
-  const handleDownloadQuestionsPDF = () => {
+  const handleDownloadQuestionsPDF = async () => {
     if (!selectedDrive?.question_bank?.length) return;
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 20;
     const maxWidth = pageWidth - 2 * margin;
-    let y = 20;
+
+    // Load logo image
+    const loadImage = (src) => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(null);
+        img.src = src;
+      });
+    };
+
+    const logoData = await loadImage(knorrLogo);
+
+    // Helper to add header to each page
+    const addHeader = () => {
+      if (logoData) {
+        doc.addImage(logoData, 'PNG', margin, 10, 20, 20);
+      }
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 51, 102);
+      doc.text('Knorr-Bremse', margin + 25, 22);
+      doc.setTextColor(0, 0, 0);
+      return 40; // Starting y position after header
+    };
+
+    let y = addHeader();
 
     // Title
-    doc.setFontSize(18);
+    doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text(selectedDrive.title, margin, y);
-    y += 10;
+    y += 8;
 
-    doc.setFontSize(12);
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Question Type: ${selectedDrive.question_type?.toUpperCase() || 'MIXED'}`, margin, y);
-    y += 6;
-    doc.text(`Total Questions: ${selectedDrive.question_bank.length}`, margin, y);
-    y += 6;
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, margin, y);
-    y += 15;
+    doc.text(`Question Type: ${selectedDrive.question_type?.toUpperCase() || 'MIXED'}  |  Total: ${selectedDrive.question_bank.length} Questions  |  Date: ${new Date().toLocaleDateString()}`, margin, y);
+    y += 12;
 
-    // Questions
+    // Divider line
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 8;
+
+    // Questions (without answers)
     selectedDrive.question_bank.forEach((q, idx) => {
       // Check if we need a new page
-      if (y > 260) {
+      if (y > 255) {
         doc.addPage();
-        y = 20;
+        y = addHeader();
       }
 
       // Question header
-      doc.setFontSize(11);
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 51, 102);
       const qHeader = `Q${idx + 1}. [${q.type?.toUpperCase()}] [${q.skill}] [${q.difficulty}] (${q.points} pts)`;
       doc.text(qHeader, margin, y);
-      y += 6;
+      doc.setTextColor(0, 0, 0);
+      y += 5;
 
-      // Question text (wrap long text)
+      // Question text
       doc.setFont('helvetica', 'normal');
       const questionLines = doc.splitTextToSize(q.question, maxWidth);
       questionLines.forEach(line => {
-        if (y > 270) {
+        if (y > 265) {
           doc.addPage();
-          y = 20;
+          y = addHeader();
         }
         doc.text(line, margin, y);
-        y += 5;
+        y += 4.5;
       });
-      y += 2;
+      y += 1;
 
       // Options for MCQ
       if (q.options && q.options.length > 0) {
         q.options.forEach(opt => {
-          if (y > 270) {
+          if (y > 265) {
             doc.addPage();
-            y = 20;
+            y = addHeader();
           }
           const optText = `   ${opt.label}. ${opt.text}`;
           const optLines = doc.splitTextToSize(optText, maxWidth - 10);
           optLines.forEach(line => {
             doc.text(line, margin, y);
-            y += 5;
+            y += 4.5;
           });
+        });
+      }
+      y += 6;
+    });
+
+    // Answer Key - New Page
+    doc.addPage();
+    y = addHeader();
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 128, 0);
+    doc.text('ANSWER KEY', margin, y);
+    doc.setTextColor(0, 0, 0);
+    y += 8;
+
+    doc.setDrawColor(0, 128, 0);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 10;
+
+    // Answers in compact format
+    selectedDrive.question_bank.forEach((q, idx) => {
+      if (y > 265) {
+        doc.addPage();
+        y = addHeader();
+      }
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      let answerText = `Q${idx + 1}: `;
+
+      doc.setFont('helvetica', 'normal');
+      if (q.correct_answer) {
+        answerText += q.correct_answer;
+        doc.text(answerText, margin, y);
+        y += 5;
+      } else if (q.expected_keywords?.length) {
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Q${idx + 1}:`, margin, y);
+        doc.setFont('helvetica', 'normal');
+        const keywordsText = `Keywords: ${q.expected_keywords.join(', ')}`;
+        const keywordLines = doc.splitTextToSize(keywordsText, maxWidth - 20);
+        keywordLines.forEach((line, lineIdx) => {
+          if (y > 265) {
+            doc.addPage();
+            y = addHeader();
+          }
+          doc.text(line, margin + 15, y);
+          y += 4.5;
         });
         y += 2;
       }
-
-      // Answer
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0, 128, 0);
-      if (q.correct_answer) {
-        doc.text(`Answer: ${q.correct_answer}`, margin, y);
-      } else if (q.expected_keywords?.length) {
-        const answerText = `Expected Keywords: ${q.expected_keywords.join(', ')}`;
-        const answerLines = doc.splitTextToSize(answerText, maxWidth);
-        answerLines.forEach(line => {
-          if (y > 270) {
-            doc.addPage();
-            y = 20;
-          }
-          doc.text(line, margin, y);
-          y += 5;
-        });
-      }
-      doc.setTextColor(0, 0, 0);
-      y += 10;
     });
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, 290, { align: 'center' });
+      doc.text('Confidential - Knorr-Bremse', pageWidth - margin, 290, { align: 'right' });
+    }
 
     // Save PDF
     const fileName = `${selectedDrive.title.replace(/[^a-z0-9]/gi, '_')}_Questions.pdf`;
