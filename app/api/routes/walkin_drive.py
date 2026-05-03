@@ -508,7 +508,12 @@ async def check_in_candidate(
 
     registration.token_number = token_number
     registration.checked_in_at = datetime.utcnow()
-    registration.status = RegistrationStatus.CHECKED_IN.value
+
+    # If test is disabled, auto-shortlist the candidate
+    if not drive.test_enabled:
+        registration.status = RegistrationStatus.SHORTLISTED.value
+    else:
+        registration.status = RegistrationStatus.CHECKED_IN.value
 
     await db.commit()
     await db.refresh(registration)
@@ -570,7 +575,8 @@ async def walkin_register(
 
         existing.token_number = token_number
         existing.checked_in_at = datetime.utcnow()
-        existing.status = RegistrationStatus.CHECKED_IN.value
+        # Auto-shortlist if test is disabled
+        existing.status = RegistrationStatus.SHORTLISTED.value if not drive.test_enabled else RegistrationStatus.CHECKED_IN.value
 
         await db.commit()
         await db.refresh(existing)
@@ -578,7 +584,7 @@ async def walkin_register(
         return CheckInResponse(
             registration=existing,
             token_number=token_number,
-            message=f"Welcome back! Token number: {token_number}",
+            message=f"Welcome back! Token number: {token_number}" + (" You can proceed to L1 interview." if not drive.test_enabled else ""),
         )
 
     # Assign token number
@@ -591,6 +597,7 @@ async def walkin_register(
     token_number = max_token + 1
 
     # Create registration with immediate check-in
+    # Auto-shortlist if test is disabled
     registration = DriveRegistration(
         drive_id=drive_id,
         name=request.name,
@@ -602,7 +609,7 @@ async def walkin_register(
         registration_code=generate_registration_code(),
         token_number=token_number,
         checked_in_at=datetime.utcnow(),
-        status=RegistrationStatus.CHECKED_IN.value,
+        status=RegistrationStatus.SHORTLISTED.value if not drive.test_enabled else RegistrationStatus.CHECKED_IN.value,
     )
 
     db.add(registration)
@@ -685,6 +692,7 @@ async def walkin_register_with_resume(
     token_number = max_token + 1
 
     # Create registration
+    # Auto-shortlist if test is disabled
     registration = DriveRegistration(
         drive_id=drive_id,
         name=name,
@@ -697,7 +705,7 @@ async def walkin_register_with_resume(
         registration_code=generate_registration_code(),
         token_number=token_number,
         checked_in_at=datetime.utcnow(),
-        status=RegistrationStatus.CHECKED_IN.value,
+        status=RegistrationStatus.SHORTLISTED.value if not drive.test_enabled else RegistrationStatus.CHECKED_IN.value,
     )
 
     db.add(registration)

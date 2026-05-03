@@ -3301,20 +3301,22 @@ function WalkInsView({ showToast }) {
               )}
             </div>
 
-            {/* Test Link for Candidates */}
-            {selectedDrive.test_enabled && selectedDrive.question_bank?.length > 0 && (
+            {/* Candidate Portal Link */}
+            {(selectedDrive.test_enabled ? selectedDrive.question_bank?.length > 0 : true) && (
               <div style={{
                 marginTop: '20px',
                 padding: '16px',
-                background: '#EEF2FF',
+                background: selectedDrive.test_enabled ? '#EEF2FF' : '#DCFCE7',
                 borderRadius: '8px',
-                border: '1px solid #C7D2FE',
+                border: selectedDrive.test_enabled ? '1px solid #C7D2FE' : '1px solid #86EFAC',
               }}>
-                <p style={{ margin: '0 0 8px', fontSize: '0.9rem', fontWeight: 600, color: '#4F46E5' }}>
-                  Candidate Test Portal
+                <p style={{ margin: '0 0 8px', fontSize: '0.9rem', fontWeight: 600, color: selectedDrive.test_enabled ? '#4F46E5' : '#166534' }}>
+                  {selectedDrive.test_enabled ? 'Candidate Test Portal' : 'Candidate Interview Portal'}
                 </p>
                 <p style={{ margin: '0 0 12px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  Share this link with candidates or open on test kiosks:
+                  {selectedDrive.test_enabled
+                    ? 'Share this link with candidates or open on test kiosks:'
+                    : 'Share this link with candidates to start their L1 interview directly:'}
                 </p>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
@@ -3328,7 +3330,7 @@ function WalkInsView({ showToast }) {
                     className="btn-sarvam"
                     onClick={() => {
                       navigator.clipboard.writeText(`${window.location.origin}?test=${selectedDrive.id}`);
-                      showToast('Test link copied!');
+                      showToast('Portal link copied!');
                     }}
                     style={{ padding: '8px 16px' }}
                   >
@@ -5550,7 +5552,9 @@ function CandidateTestPortal({ driveId }) {
         });
         setStage('result');
       } else if (!res.data.test_enabled) {
-        setError('Test is not enabled for this drive');
+        // No test - candidate is auto-shortlisted for interview
+        setResult({ passed: true, noTest: true });
+        setStage('result');
       } else if (res.data.drive_status === 'completed') {
         setError('This drive has ended. Please contact HR for any queries.');
       } else if (res.data.drive_status !== 'ongoing') {
@@ -6013,27 +6017,33 @@ function CandidateTestPortal({ driveId }) {
             </div>
 
             <h2 style={{ margin: '0 0 8px', fontSize: '2rem' }}>
-              {result.passed ? 'Congratulations!' : 'Test Completed'}
+              {result.noTest ? 'Welcome!' : (result.passed ? 'Congratulations!' : 'Test Completed')}
             </h2>
 
             <p style={{ color: '#6B7280', margin: '0 0 24px', fontSize: '1.1rem' }}>
-              {result.passed
-                ? 'You have passed the assessment!'
-                : 'Thank you for taking the assessment.'}
+              {result.noTest
+                ? 'You have been checked in and shortlisted for the interview.'
+                : (result.passed
+                  ? 'You have passed the assessment!'
+                  : 'Thank you for taking the assessment.')}
             </p>
 
-            <div style={{
-              fontSize: '4rem',
-              fontWeight: 700,
-              color: result.passed ? '#10B981' : '#EF4444',
-              marginBottom: '16px',
-            }}>
-              {Math.round(result.score)}%
-            </div>
+            {!result.noTest && (
+              <>
+                <div style={{
+                  fontSize: '4rem',
+                  fontWeight: 700,
+                  color: result.passed ? '#10B981' : '#EF4444',
+                  marginBottom: '16px',
+                }}>
+                  {Math.round(result.score)}%
+                </div>
 
-            <p style={{ color: '#6B7280', margin: 0 }}>
-              {result.earned && `${result.earned} / ${result.total} points`}
-            </p>
+                <p style={{ color: '#6B7280', margin: 0 }}>
+                  {result.earned && `${result.earned} / ${result.total} points`}
+                </p>
+              </>
+            )}
 
             {/* Status-specific next steps */}
             {candidate?.status === 'approved_l2' && (
