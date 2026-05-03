@@ -53,13 +53,15 @@ async def create_drive(
         raise HTTPException(status_code=404, detail="Job not found")
 
     # Check for duplicate drive (same job, same date) unless force=True
+    # Exclude completed drives from duplicate check
     if not force:
-        # Check if there's a drive for the same job on the same date
+        # Check if there's an active drive for the same job on the same date
         drive_date = request.drive_date.date() if hasattr(request.drive_date, 'date') else request.drive_date
         result = await db.execute(
             select(WalkInDrive).where(
                 WalkInDrive.job_id == request.job_id,
                 func.date(WalkInDrive.drive_date) == drive_date,
+                WalkInDrive.status != DriveStatus.COMPLETED.value,
             )
         )
         existing_drive = result.scalar_one_or_none()

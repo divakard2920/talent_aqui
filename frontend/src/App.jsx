@@ -4577,7 +4577,7 @@ function WalkInsView({ showToast }) {
             </div>
           )}
 
-          <button className="btn-sarvam" onClick={handleCreateDrive} style={{ marginTop: '8px' }}>
+          <button className="btn-sarvam" onClick={() => handleCreateDrive()} style={{ marginTop: '8px' }}>
             Create Drive
           </button>
         </div>
