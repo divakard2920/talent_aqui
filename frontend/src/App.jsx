@@ -2491,11 +2491,8 @@ function WalkInsView({ showToast }) {
         ...formData,
         job_id: parseInt(formData.job_id),
         drive_date: new Date(formData.drive_date).toISOString(),
+        total_capacity: formData.total_capacity ? parseInt(formData.total_capacity) : null,
       };
-      // Only include capacity if set
-      if (!formData.total_capacity) {
-        delete payload.total_capacity;
-      }
       const res = await walkinApi.create(payload);
       setDrives(prev => [res.data, ...prev]);
       setShowCreateModal(false);
@@ -2794,18 +2791,30 @@ function WalkInsView({ showToast }) {
 
           {/* Stats */}
           {stats && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: selectedDrive.total_capacity ? 'repeat(6, 1fr)' : 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
               {[
                 { label: 'Registered', value: stats.total_registered, icon: Users },
                 { label: 'Checked In', value: stats.checked_in, icon: UserCheck },
                 { label: 'Tested', value: stats.tested, icon: ClipboardList },
                 { label: 'Passed', value: stats.passed, icon: Trophy },
                 { label: 'Shortlisted', value: stats.shortlisted, icon: CheckCircle },
+                ...(selectedDrive.total_capacity ? [{
+                  label: 'Capacity',
+                  value: `${stats.total_registered}/${selectedDrive.total_capacity}`,
+                  icon: Users,
+                  highlight: stats.total_registered >= selectedDrive.total_capacity
+                }] : []),
               ].map((stat, i) => (
-                <div key={i} style={{ textAlign: 'center', padding: '12px', background: '#F9FAFB', borderRadius: '12px' }}>
-                  <stat.icon size={20} style={{ color: 'var(--brand-navy)', marginBottom: '4px' }} />
-                  <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>{stat.value}</p>
-                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{stat.label}</p>
+                <div key={i} style={{
+                  textAlign: 'center',
+                  padding: '12px',
+                  background: stat.highlight ? '#FEE2E2' : '#F9FAFB',
+                  borderRadius: '12px',
+                  border: stat.highlight ? '1px solid #EF4444' : 'none',
+                }}>
+                  <stat.icon size={20} style={{ color: stat.highlight ? '#DC2626' : 'var(--brand-navy)', marginBottom: '4px' }} />
+                  <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: stat.highlight ? '#DC2626' : 'inherit' }}>{stat.value}</p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: stat.highlight ? '#DC2626' : 'var(--text-muted)' }}>{stat.label}</p>
                 </div>
               ))}
             </div>

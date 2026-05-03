@@ -262,6 +262,17 @@ async def register_candidate(
     if drive.status not in [DriveStatus.REGISTRATION_OPEN.value, DriveStatus.DRAFT.value]:
         raise HTTPException(status_code=400, detail="Registration is not open for this drive")
 
+    # Check capacity
+    if drive.total_capacity:
+        result = await db.execute(
+            select(func.count(DriveRegistration.id)).where(
+                DriveRegistration.drive_id == drive_id
+            )
+        )
+        current_count = result.scalar() or 0
+        if current_count >= drive.total_capacity:
+            raise HTTPException(status_code=400, detail="Drive has reached maximum capacity")
+
     # Check if already registered
     result = await db.execute(
         select(DriveRegistration).where(
@@ -477,6 +488,17 @@ async def walkin_register(
     if not drive:
         raise HTTPException(status_code=404, detail="Drive not found")
 
+    # Check capacity before new registration
+    if drive.total_capacity:
+        result = await db.execute(
+            select(func.count(DriveRegistration.id)).where(
+                DriveRegistration.drive_id == drive_id
+            )
+        )
+        current_count = result.scalar() or 0
+        if current_count >= drive.total_capacity:
+            raise HTTPException(status_code=400, detail="Drive has reached maximum capacity. Cannot accept more registrations.")
+
     # Check if already registered by email or phone
     result = await db.execute(
         select(DriveRegistration).where(
@@ -567,6 +589,17 @@ async def walkin_register_with_resume(
     drive = result.scalar_one_or_none()
     if not drive:
         raise HTTPException(status_code=404, detail="Drive not found")
+
+    # Check capacity
+    if drive.total_capacity:
+        result = await db.execute(
+            select(func.count(DriveRegistration.id)).where(
+                DriveRegistration.drive_id == drive_id
+            )
+        )
+        current_count = result.scalar() or 0
+        if current_count >= drive.total_capacity:
+            raise HTTPException(status_code=400, detail="Drive has reached maximum capacity. Cannot accept more registrations.")
 
     # Check if already registered
     result = await db.execute(
