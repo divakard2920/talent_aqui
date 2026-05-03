@@ -2616,6 +2616,7 @@ function WalkInsView({ showToast }) {
     };
 
     const logoData = await loadImage(knorrLogo);
+    const falconLogoData = await loadImage(falconLogo);
 
     // Helper to add header to each page
     const addHeader = () => {
@@ -2628,9 +2629,10 @@ function WalkInsView({ showToast }) {
       doc.setTextColor(0, 51, 102);
       doc.text('Knorr-Bremse', margin + 25, 22);
 
-      // Right side: Falcon
-      doc.setFontSize(16);
-      doc.text('Falcon', pageWidth - margin, 22, { align: 'right' });
+      // Right side: Falcon logo
+      if (falconLogoData) {
+        doc.addImage(falconLogoData, 'PNG', pageWidth - margin - 45, 8, 45, 20);
+      }
       doc.setTextColor(0, 0, 0);
       return 40; // Starting y position after header
     };
