@@ -226,7 +226,21 @@ function App() {
           <div className="flex-center" style={{ marginRight: '16px' }}>
             <img src={knorrLogo} alt="Knorr-Bremse" style={{ height: '32px', marginRight: '12px', borderRadius: '4px' }} />
             <span style={{ fontSize: '1.2rem', fontWeight: 600, fontFamily: 'var(--font-sans)', color: 'var(--brand-navy)', letterSpacing: '-0.02em' }}>
-              Knorr-Bremse <span style={{ fontWeight: 400, color: 'var(--text-primary)' }}>Falcon</span>
+              Knorr-Bremse
+            </span>
+            <span style={{
+              marginLeft: '10px',
+              padding: '4px 12px',
+              background: 'linear-gradient(135deg, #1e3a5f 0%, #0d1b2a 100%)',
+              color: '#ffffff',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              borderRadius: '6px',
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
+            }}>
+              Falcon
             </span>
           </div>
 
