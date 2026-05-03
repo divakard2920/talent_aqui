@@ -2968,7 +2968,7 @@ function WalkInsView({ showToast }) {
                 </button>
                 {selectedDrive.test_enabled && (
                   selectedDrive.question_bank?.length > 0 ? (
-                    <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ position: 'relative', zIndex: 1000 }} onClick={(e) => e.stopPropagation()}>
                       <button
                         className="btn-sarvam"
                         onClick={() => setQuestionsDropdownOpen(!questionsDropdownOpen)}
@@ -2987,7 +2987,7 @@ function WalkInsView({ showToast }) {
                             border: '1px solid #e5e7eb',
                             borderRadius: '8px',
                             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                            zIndex: 100,
+                            zIndex: 1001,
                             minWidth: '240px',
                             overflow: 'hidden'
                           }}
