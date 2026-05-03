@@ -229,17 +229,25 @@ function App() {
               Knorr-Bremse
             </span>
             <span style={{ margin: '0 8px', color: '#d1d5db', fontWeight: 300 }}>|</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-              <svg width="20" height="24" viewBox="0 0 20 24" fill="none" style={{ marginRight: '1px' }}>
-                {/* F with bird beak style */}
-                <path d="M2 2 L2 22" stroke="#1e40af" strokeWidth="3" strokeLinecap="round"/>
-                <path d="M2 2 L14 2 L18 5 L14 8 L2 8" fill="#1e40af"/>
-                <path d="M2 12 L10 12 L13 14.5 L10 17 L2 17" fill="#f59e0b"/>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <svg width="22" height="26" viewBox="0 0 24 28" fill="none">
+                {/* Falcon head profile - looks like F */}
+                {/* Head curve */}
+                <path d="M4 2 C12 2 14 4 14 8 C14 10 12 11 10 11 L4 11" fill="#1e3a5f"/>
+                {/* Beak - sharp pointed */}
+                <path d="M14 6 L22 8 L14 10 Z" fill="#f59e0b"/>
+                {/* Eye */}
+                <circle cx="10" cy="6" r="1.5" fill="#ffffff"/>
+                <circle cx="10" cy="6" r="0.8" fill="#1e3a5f"/>
+                {/* Neck/Body going down like F stem */}
+                <path d="M4 11 L4 26 C4 26 6 26 6 24 L6 11" fill="#1e3a5f"/>
+                {/* Chest feathers - middle bar of F */}
+                <path d="M6 16 L12 16 L14 18 L12 20 L6 20 Z" fill="#1e3a5f"/>
               </svg>
               <span style={{
-                fontSize: '1.2rem',
+                fontSize: '1.25rem',
                 fontWeight: 700,
-                color: '#1e40af',
+                color: '#1e3a5f',
                 letterSpacing: '0.01em'
               }}>
                 alcon
