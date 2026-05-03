@@ -2304,6 +2304,8 @@ function WalkInsView({ showToast }) {
   const [stats, setStats] = useState(null);
   const [generatingQuestions, setGeneratingQuestions] = useState(false);
   const [questionsDropdownOpen, setQuestionsDropdownOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const questionsButtonRef = React.useRef(null);
   const [walkinRegistering, setWalkinRegistering] = useState(false);
   const [lastToken, setLastToken] = useState(null);
   const [walkinForm, setWalkinForm] = useState({
@@ -2968,10 +2970,17 @@ function WalkInsView({ showToast }) {
                 </button>
                 {selectedDrive.test_enabled && (
                   selectedDrive.question_bank?.length > 0 ? (
-                    <div style={{ position: 'relative', zIndex: 1000 }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
                       <button
+                        ref={questionsButtonRef}
                         className="btn-sarvam"
-                        onClick={() => setQuestionsDropdownOpen(!questionsDropdownOpen)}
+                        onClick={() => {
+                          if (!questionsDropdownOpen && questionsButtonRef.current) {
+                            const rect = questionsButtonRef.current.getBoundingClientRect();
+                            setDropdownPosition({ top: rect.bottom + 4, left: rect.left });
+                          }
+                          setQuestionsDropdownOpen(!questionsDropdownOpen);
+                        }}
                       >
                         <ClipboardList size={16} /> Questions ({selectedDrive.question_bank.length})
                         <ChevronDown size={14} style={{ marginLeft: '4px' }} />
@@ -2979,15 +2988,14 @@ function WalkInsView({ showToast }) {
                       {questionsDropdownOpen && (
                         <div
                           style={{
-                            position: 'absolute',
-                            top: '100%',
-                            left: 0,
-                            marginTop: '4px',
+                            position: 'fixed',
+                            top: dropdownPosition.top,
+                            left: dropdownPosition.left,
                             backgroundColor: '#ffffff',
                             border: '1px solid #e5e7eb',
                             borderRadius: '8px',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                            zIndex: 1001,
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                            zIndex: 9999,
                             minWidth: '240px',
                             overflow: 'hidden'
                           }}
