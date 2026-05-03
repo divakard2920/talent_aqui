@@ -6252,7 +6252,7 @@ function CandidateTestPortal({ driveId }) {
               </div>
             )}
 
-            {candidate?.status !== 'shortlisted' && candidate?.status !== 'rejected' && candidate?.status !== 'approved_l2' && candidate?.status !== 'on_hold' && (
+            {!result.noTest && candidate?.status !== 'shortlisted' && candidate?.status !== 'rejected' && candidate?.status !== 'approved_l2' && candidate?.status !== 'on_hold' && (
               <div style={{
                 marginTop: '32px',
                 padding: '20px',
