@@ -229,13 +229,21 @@ function App() {
               Knorr-Bremse
             </span>
             <span style={{ margin: '0 8px', color: '#d1d5db', fontWeight: 300 }}>|</span>
-            <span style={{
-              fontSize: '1.2rem',
-              fontWeight: 700,
-              color: '#2563eb',
-              letterSpacing: '0.02em'
-            }}>
-              Falcon
+            <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+              <svg width="20" height="24" viewBox="0 0 20 24" fill="none" style={{ marginRight: '1px' }}>
+                {/* F with bird beak style */}
+                <path d="M2 2 L2 22" stroke="#1e40af" strokeWidth="3" strokeLinecap="round"/>
+                <path d="M2 2 L14 2 L18 5 L14 8 L2 8" fill="#1e40af"/>
+                <path d="M2 12 L10 12 L13 14.5 L10 17 L2 17" fill="#f59e0b"/>
+              </svg>
+              <span style={{
+                fontSize: '1.2rem',
+                fontWeight: 700,
+                color: '#1e40af',
+                letterSpacing: '0.01em'
+              }}>
+                alcon
+              </span>
             </span>
           </div>
 
