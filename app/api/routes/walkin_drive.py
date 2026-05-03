@@ -1086,17 +1086,14 @@ async def lookup_candidate(
         total_seconds = drive.test_duration_minutes * 60
         remaining_seconds = max(0, int(total_seconds - elapsed))
 
-    # Check for existing interview
+    # Check for interview linked to THIS registration (not just any interview for this candidate)
     from app.models.interview import Interview
     interview_status = None
     interview_id = None
     interview_score = None
-    if registration.candidate_id:
+    if registration.interview_id:
         result = await db.execute(
-            select(Interview).where(
-                Interview.candidate_id == registration.candidate_id,
-                Interview.job_id == drive.job_id,
-            ).order_by(Interview.created_at.desc())
+            select(Interview).where(Interview.id == registration.interview_id)
         )
         interview = result.scalar_one_or_none()
         if interview:
@@ -1250,33 +1247,33 @@ async def start_walkin_interview(
 
     # Link candidate to registration
     registration.candidate_id = candidate.id
-    await db.commit()
 
-    # Check if interview already exists for this candidate and job
-    result = await db.execute(
-        select(Interview).where(
-            Interview.candidate_id == candidate.id,
-            Interview.job_id == drive.job_id,
-        ).order_by(Interview.created_at.desc())
-    )
-    existing_interview = result.scalar_one_or_none()
+    # Check if THIS registration already has an interview
+    if registration.interview_id:
+        result = await db.execute(
+            select(Interview).where(Interview.id == registration.interview_id)
+        )
+        existing_interview = result.scalar_one_or_none()
+        if existing_interview:
+            await db.commit()
+            return {
+                "interview_id": existing_interview.id,
+                "candidate_id": candidate.id,
+                "job_id": drive.job_id,
+                "status": existing_interview.status,
+            }
 
-    if existing_interview:
-        # Return existing interview
-        return {
-            "interview_id": existing_interview.id,
-            "candidate_id": candidate.id,
-            "job_id": drive.job_id,
-            "status": existing_interview.status,
-        }
-
-    # Create new interview only if none exists
+    # Create new interview for this registration (each drive gets its own interview)
     interview = Interview(
         candidate_id=candidate.id,
         job_id=drive.job_id,
         status=InterviewStatus.SCHEDULED.value,
     )
     db.add(interview)
+    await db.flush()  # Get the interview ID
+
+    # Link interview to this registration
+    registration.interview_id = interview.id
     await db.commit()
     await db.refresh(interview)
 
