@@ -22,6 +22,8 @@ from app.schemas.walkin_drive import (
     LeaderboardEntry, DriveStats,
 )
 from app.services.question_generator import question_generator
+from app.services.pdf_parser import pdf_parser
+from app.services.resume_analyzer import resume_analyzer
 
 router = APIRouter(prefix="/walkin-drives", tags=["walkin-drives"])
 
@@ -1200,12 +1202,37 @@ async def start_walkin_interview(
     candidate = result.scalar_one_or_none()
 
     if not candidate:
-        # Create new candidate record
+        # Parse resume if available
+        parsed_data = None
+        resume_text = None
+        resume_path = registration.resume_path if hasattr(registration, 'resume_path') and registration.resume_path else None
+
+        if resume_path:
+            try:
+                import os
+                if os.path.exists(resume_path):
+                    # Extract text from PDF
+                    resume_text = pdf_parser.extract_text(resume_path)
+                    if resume_text:
+                        # Parse resume using AI
+                        parsed_resume = resume_analyzer.parse_resume(resume_text)
+                        parsed_data = parsed_resume.model_dump()
+                        # Generate AI assessment
+                        ai_assessment = resume_analyzer.generate_ai_assessment(parsed_resume)
+                        if ai_assessment:
+                            parsed_data["ai_assessment"] = ai_assessment
+            except Exception as e:
+                # Log error but don't fail - candidate can still proceed
+                print(f"Error parsing resume for registration {registration_id}: {e}")
+
+        # Create new candidate record with parsed data
         candidate = Candidate(
             name=registration.name,
             email=registration.email,
             phone=registration.phone,
-            resume_file_path=registration.resume_path if hasattr(registration, 'resume_path') else None,
+            resume_file_path=resume_path,
+            resume_text=resume_text,
+            parsed_data=parsed_data,
             source="walkin_drive",
             source_id=f"drive_{drive_id}_reg_{registration_id}",
         )
