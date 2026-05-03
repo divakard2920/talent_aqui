@@ -341,7 +341,7 @@ function DashboardView({ onNavigate }) {
     >
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '3.5rem', marginBottom: '1rem', lineHeight: 1.1 }}>
-          Powering your <br />AI-<img src={falconFLogo} alt="f" style={{ height: '3.5rem', verticalAlign: 'middle', marginBottom: '4px' }} />irst hiring.
+          Powering your <br />AI-<img src={falconFLogo} alt="f" style={{ height: '4.5rem', verticalAlign: 'middle', marginBottom: '6px', marginRight: '-12px' }} />irst hiring.
         </h1>
         <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 2rem auto', lineHeight: 1.6 }}>
           Automatically source developers, parse resumes, and discover perfect matches with frontier models.
@@ -2621,7 +2621,7 @@ function WalkInsView({ showToast }) {
     };
 
     const logoData = await loadImage(knorrLogo);
-    const falconLogoData = await loadImage(falconLogo);
+    const falconFLogoData = await loadImage(falconFLogo);
 
     // Helper to add header to each page
     const addHeader = () => {
@@ -2634,10 +2634,14 @@ function WalkInsView({ showToast }) {
       doc.setTextColor(0, 51, 102);
       doc.text('Knorr-Bremse', margin + 25, 22);
 
-      // Right side: Falcon logo
-      if (falconLogoData) {
-        doc.addImage(falconLogoData, 'PNG', pageWidth - margin - 50, 6, 50, 22);
+      // Right side: Falcon F logo + "alcon" text
+      if (falconFLogoData) {
+        doc.addImage(falconFLogoData, 'PNG', pageWidth - margin - 42, 6, 18, 18);
       }
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 58, 95);
+      doc.text('alcon', pageWidth - margin - 22, 19);
       doc.setTextColor(0, 0, 0);
       return 40; // Starting y position after header
     };
