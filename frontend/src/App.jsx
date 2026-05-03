@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import './index.css';
 import knorrLogo from './assets/knorr.png';
+import { jsPDF } from 'jspdf';
 import { jobsApi, candidatesApi, resumeApi, githubApi, interviewApi, walkinApi } from './services/api';
 import { Modal, JobForm, GitHubSearchForm, GitHubCandidateCard, ResumeUpload, CandidateResult, ConfirmDialog, InterviewRoom } from './components';
 
@@ -2585,6 +2586,102 @@ function WalkInsView({ showToast }) {
     }
   };
 
+  const handleDownloadQuestionsPDF = () => {
+    if (!selectedDrive?.question_bank?.length) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxWidth = pageWidth - 2 * margin;
+    let y = 20;
+
+    // Title
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(selectedDrive.title, margin, y);
+    y += 10;
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Question Type: ${selectedDrive.question_type?.toUpperCase() || 'MIXED'}`, margin, y);
+    y += 6;
+    doc.text(`Total Questions: ${selectedDrive.question_bank.length}`, margin, y);
+    y += 6;
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, margin, y);
+    y += 15;
+
+    // Questions
+    selectedDrive.question_bank.forEach((q, idx) => {
+      // Check if we need a new page
+      if (y > 260) {
+        doc.addPage();
+        y = 20;
+      }
+
+      // Question header
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      const qHeader = `Q${idx + 1}. [${q.type?.toUpperCase()}] [${q.skill}] [${q.difficulty}] (${q.points} pts)`;
+      doc.text(qHeader, margin, y);
+      y += 6;
+
+      // Question text (wrap long text)
+      doc.setFont('helvetica', 'normal');
+      const questionLines = doc.splitTextToSize(q.question, maxWidth);
+      questionLines.forEach(line => {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(line, margin, y);
+        y += 5;
+      });
+      y += 2;
+
+      // Options for MCQ
+      if (q.options && q.options.length > 0) {
+        q.options.forEach(opt => {
+          if (y > 270) {
+            doc.addPage();
+            y = 20;
+          }
+          const optText = `   ${opt.label}. ${opt.text}`;
+          const optLines = doc.splitTextToSize(optText, maxWidth - 10);
+          optLines.forEach(line => {
+            doc.text(line, margin, y);
+            y += 5;
+          });
+        });
+        y += 2;
+      }
+
+      // Answer
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 128, 0);
+      if (q.correct_answer) {
+        doc.text(`Answer: ${q.correct_answer}`, margin, y);
+      } else if (q.expected_keywords?.length) {
+        const answerText = `Expected Keywords: ${q.expected_keywords.join(', ')}`;
+        const answerLines = doc.splitTextToSize(answerText, maxWidth);
+        answerLines.forEach(line => {
+          if (y > 270) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.text(line, margin, y);
+          y += 5;
+        });
+      }
+      doc.setTextColor(0, 0, 0);
+      y += 10;
+    });
+
+    // Save PDF
+    const fileName = `${selectedDrive.title.replace(/[^a-z0-9]/gi, '_')}_Questions.pdf`;
+    doc.save(fileName);
+    showToast('PDF downloaded successfully!');
+  };
+
   const handleUpdateStatus = async (status) => {
     if (!selectedDrive) return;
 
@@ -2861,10 +2958,17 @@ function WalkInsView({ showToast }) {
                   <Trash2 size={16} /> Delete
                 </button>
                 {selectedDrive.test_enabled && (
-                  <button className="btn-sarvam" onClick={handleGenerateQuestions} disabled={generatingQuestions}>
-                    {generatingQuestions ? <Loader2 size={16} className="spin" /> : <ClipboardList size={16} />}
-                    {selectedDrive.question_bank?.length ? 'Regenerate Questions' : 'Generate Questions'}
-                  </button>
+                  <>
+                    <button className="btn-sarvam" onClick={handleGenerateQuestions} disabled={generatingQuestions}>
+                      {generatingQuestions ? <Loader2 size={16} className="spin" /> : <ClipboardList size={16} />}
+                      {selectedDrive.question_bank?.length ? 'Regenerate Questions' : 'Generate Questions'}
+                    </button>
+                    {selectedDrive.question_bank?.length > 0 && (
+                      <button className="btn-pill" onClick={handleDownloadQuestionsPDF}>
+                        <Download size={16} /> Download PDF
+                      </button>
+                    )}
+                  </>
                 )}
                 <button className="btn-sarvam" onClick={() => handleUpdateStatus('registration_open')}>
                   Open Registration
