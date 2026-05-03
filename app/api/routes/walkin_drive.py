@@ -88,6 +88,7 @@ async def create_drive(
         slots=[s.model_dump() for s in request.slots] if request.slots else None,
         total_capacity=request.total_capacity,
         test_enabled=request.test_enabled,
+        question_type=request.question_type,
         questions_per_candidate=request.questions_per_candidate,
         test_duration_minutes=request.test_duration_minutes,
         passing_score_percent=request.passing_score_percent,
@@ -240,6 +241,17 @@ async def generate_questions(
     print(f"[GenerateQuestions] Skills Preferred: {job.skills_preferred}")
     print(f"[GenerateQuestions] Experience: {job.experience_min_years}-{job.experience_max_years} years")
 
+    # Determine MCQ ratio based on drive's question_type
+    question_type = drive.question_type or "mixed"
+    if question_type == "mcq":
+        mcq_ratio = 1.0
+    elif question_type == "short_answer":
+        mcq_ratio = 0.0
+    else:  # mixed
+        mcq_ratio = request.mcq_ratio if request.mcq_ratio else 0.7
+
+    print(f"[GenerateQuestions] Question type: {question_type}, MCQ ratio: {mcq_ratio}")
+
     # Generate questions
     questions = question_generator.generate_question_bank(
         job_title=job.title,
@@ -249,7 +261,7 @@ async def generate_questions(
         experience_max_years=job.experience_max_years or 5,
         job_description=job.description or "",
         total_questions=request.total_questions,
-        mcq_ratio=request.mcq_ratio,
+        mcq_ratio=mcq_ratio,
         difficulty_distribution=request.difficulty_distribution,
     )
 

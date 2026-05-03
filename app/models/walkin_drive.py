@@ -39,6 +39,7 @@ class WalkInDrive(Base):
 
     # Test configuration
     test_enabled = Column(Boolean, default=True)
+    question_type = Column(String(20), default="mixed")  # mcq, short_answer, mixed
     questions_per_candidate = Column(Integer, default=20)
     test_duration_minutes = Column(Integer, default=30)
     passing_score_percent = Column(Integer, default=60)

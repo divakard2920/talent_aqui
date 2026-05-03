@@ -2323,6 +2323,7 @@ function WalkInsView({ showToast }) {
     drive_date: '',
     total_capacity: '',
     test_enabled: true,
+    question_type: 'mixed',  // mcq, short_answer, mixed
     questions_per_candidate: 20,
     test_duration_minutes: 30,
     passing_score_percent: 60,
@@ -2502,6 +2503,7 @@ function WalkInsView({ showToast }) {
         drive_date: '',
         total_capacity: '',
         test_enabled: true,
+        question_type: 'mixed',
         questions_per_candidate: 20,
         test_duration_minutes: 30,
         passing_score_percent: 60,
@@ -2605,6 +2607,7 @@ function WalkInsView({ showToast }) {
       drive_date: new Date(selectedDrive.drive_date).toISOString().slice(0, 16),
       total_capacity: selectedDrive.total_capacity || '',
       test_enabled: selectedDrive.test_enabled,
+      question_type: selectedDrive.question_type || 'mixed',
       questions_per_candidate: selectedDrive.questions_per_candidate,
       test_duration_minutes: selectedDrive.test_duration_minutes,
       passing_score_percent: selectedDrive.passing_score_percent,
@@ -2621,6 +2624,7 @@ function WalkInsView({ showToast }) {
         drive_date: new Date(formData.drive_date).toISOString(),
         total_capacity: formData.total_capacity ? parseInt(formData.total_capacity) : null,
         test_enabled: formData.test_enabled,
+        question_type: formData.question_type,
         questions_per_candidate: formData.questions_per_candidate,
         test_duration_minutes: formData.test_duration_minutes,
         passing_score_percent: formData.passing_score_percent,
@@ -2969,6 +2973,13 @@ function WalkInsView({ showToast }) {
               </div>
               {selectedDrive.test_enabled && (
                 <>
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Question Type</p>
+                    <p style={{ margin: 0, fontWeight: 600 }}>
+                      {selectedDrive.question_type === 'mcq' ? 'MCQ Only' :
+                       selectedDrive.question_type === 'short_answer' ? 'Short Answer Only' : 'Mixed'}
+                    </p>
+                  </div>
                   <div>
                     <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Questions per Candidate</p>
                     <p style={{ margin: 0, fontWeight: 600 }}>{selectedDrive.questions_per_candidate}</p>
@@ -4249,43 +4260,66 @@ function WalkInsView({ showToast }) {
           </div>
 
           {formData.test_enabled && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', padding: '16px', background: '#F9FAFB', borderRadius: '12px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={formData.questions_per_candidate}
-                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: e.target.value })}
-                  onBlur={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
-                  className="input-elegant"
-                  style={{ padding: '8px 12px' }}
-                />
+            <div style={{ padding: '16px', background: '#F9FAFB', borderRadius: '12px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Question Type</label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  {[
+                    { value: 'mcq', label: 'MCQ Only' },
+                    { value: 'short_answer', label: 'Short Answer Only' },
+                    { value: 'mixed', label: 'Mixed (MCQ + Short Answer)' },
+                  ].map(opt => (
+                    <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="question_type_edit"
+                        value={opt.value}
+                        checked={formData.question_type === opt.value}
+                        onChange={(e) => setFormData({ ...formData, question_type: e.target.value })}
+                      />
+                      <span style={{ fontSize: '0.85rem' }}>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={formData.test_duration_minutes}
-                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: e.target.value })}
-                  onBlur={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
-                  className="input-elegant"
-                  style={{ padding: '8px 12px' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={formData.passing_score_percent}
-                  onChange={(e) => setFormData({ ...formData, passing_score_percent: e.target.value })}
-                  onBlur={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
-                  className="input-elegant"
-                  style={{ padding: '8px 12px' }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.questions_per_candidate}
+                    onChange={(e) => setFormData({ ...formData, questions_per_candidate: e.target.value })}
+                    onBlur={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
+                    className="input-elegant"
+                    style={{ padding: '8px 12px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.test_duration_minutes}
+                    onChange={(e) => setFormData({ ...formData, test_duration_minutes: e.target.value })}
+                    onBlur={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
+                    className="input-elegant"
+                    style={{ padding: '8px 12px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={formData.passing_score_percent}
+                    onChange={(e) => setFormData({ ...formData, passing_score_percent: e.target.value })}
+                    onBlur={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
+                    className="input-elegant"
+                    style={{ padding: '8px 12px' }}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -4539,43 +4573,66 @@ function WalkInsView({ showToast }) {
           </div>
 
           {formData.test_enabled && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', padding: '16px', background: '#F9FAFB', borderRadius: '12px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={formData.questions_per_candidate}
-                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: e.target.value })}
-                  onBlur={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
-                  className="input-elegant"
-                  style={{ padding: '8px 12px' }}
-                />
+            <div style={{ padding: '16px', background: '#F9FAFB', borderRadius: '12px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Question Type</label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  {[
+                    { value: 'mcq', label: 'MCQ Only' },
+                    { value: 'short_answer', label: 'Short Answer Only' },
+                    { value: 'mixed', label: 'Mixed (MCQ + Short Answer)' },
+                  ].map(opt => (
+                    <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="question_type"
+                        value={opt.value}
+                        checked={formData.question_type === opt.value}
+                        onChange={(e) => setFormData({ ...formData, question_type: e.target.value })}
+                      />
+                      <span style={{ fontSize: '0.85rem' }}>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={formData.test_duration_minutes}
-                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: e.target.value })}
-                  onBlur={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
-                  className="input-elegant"
-                  style={{ padding: '8px 12px' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={formData.passing_score_percent}
-                  onChange={(e) => setFormData({ ...formData, passing_score_percent: e.target.value })}
-                  onBlur={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
-                  className="input-elegant"
-                  style={{ padding: '8px 12px' }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.questions_per_candidate}
+                    onChange={(e) => setFormData({ ...formData, questions_per_candidate: e.target.value })}
+                    onBlur={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
+                    className="input-elegant"
+                    style={{ padding: '8px 12px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.test_duration_minutes}
+                    onChange={(e) => setFormData({ ...formData, test_duration_minutes: e.target.value })}
+                    onBlur={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
+                    className="input-elegant"
+                    style={{ padding: '8px 12px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={formData.passing_score_percent}
+                    onChange={(e) => setFormData({ ...formData, passing_score_percent: e.target.value })}
+                    onBlur={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
+                    className="input-elegant"
+                    style={{ padding: '8px 12px' }}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -4633,43 +4690,66 @@ function WalkInsView({ showToast }) {
           </div>
 
           {formData.test_enabled && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', padding: '16px', background: '#F9FAFB', borderRadius: '12px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={formData.questions_per_candidate}
-                  onChange={(e) => setFormData({ ...formData, questions_per_candidate: e.target.value })}
-                  onBlur={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
-                  className="input-elegant"
-                  style={{ padding: '8px 12px' }}
-                />
+            <div style={{ padding: '16px', background: '#F9FAFB', borderRadius: '12px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Question Type</label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  {[
+                    { value: 'mcq', label: 'MCQ Only' },
+                    { value: 'short_answer', label: 'Short Answer Only' },
+                    { value: 'mixed', label: 'Mixed (MCQ + Short Answer)' },
+                  ].map(opt => (
+                    <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="question_type_edit"
+                        value={opt.value}
+                        checked={formData.question_type === opt.value}
+                        onChange={(e) => setFormData({ ...formData, question_type: e.target.value })}
+                      />
+                      <span style={{ fontSize: '0.85rem' }}>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={formData.test_duration_minutes}
-                  onChange={(e) => setFormData({ ...formData, test_duration_minutes: e.target.value })}
-                  onBlur={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
-                  className="input-elegant"
-                  style={{ padding: '8px 12px' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={formData.passing_score_percent}
-                  onChange={(e) => setFormData({ ...formData, passing_score_percent: e.target.value })}
-                  onBlur={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
-                  className="input-elegant"
-                  style={{ padding: '8px 12px' }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Questions/Candidate</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.questions_per_candidate}
+                    onChange={(e) => setFormData({ ...formData, questions_per_candidate: e.target.value })}
+                    onBlur={(e) => setFormData({ ...formData, questions_per_candidate: parseInt(e.target.value) || 20 })}
+                    className="input-elegant"
+                    style={{ padding: '8px 12px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration (min)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.test_duration_minutes}
+                    onChange={(e) => setFormData({ ...formData, test_duration_minutes: e.target.value })}
+                    onBlur={(e) => setFormData({ ...formData, test_duration_minutes: parseInt(e.target.value) || 30 })}
+                    className="input-elegant"
+                    style={{ padding: '8px 12px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Passing %</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={formData.passing_score_percent}
+                    onChange={(e) => setFormData({ ...formData, passing_score_percent: e.target.value })}
+                    onBlur={(e) => setFormData({ ...formData, passing_score_percent: parseInt(e.target.value) || 60 })}
+                    className="input-elegant"
+                    style={{ padding: '8px 12px' }}
+                  />
+                </div>
               </div>
             </div>
           )}

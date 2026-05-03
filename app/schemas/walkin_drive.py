@@ -21,6 +21,7 @@ class DriveCreate(BaseModel):
     slots: Optional[list[TimeSlot]] = None
     total_capacity: Optional[int] = None  # Optional - walk-ins are hard to predict
     test_enabled: bool = True
+    question_type: str = "mixed"  # mcq, short_answer, mixed
     questions_per_candidate: int = 20
     test_duration_minutes: int = 30
     passing_score_percent: int = 60
@@ -32,6 +33,7 @@ class DriveUpdate(BaseModel):
     slots: Optional[list[TimeSlot]] = None
     total_capacity: Optional[int] = None
     test_enabled: Optional[bool] = None
+    question_type: Optional[str] = None  # mcq, short_answer, mixed
     questions_per_candidate: Optional[int] = None
     test_duration_minutes: Optional[int] = None
     passing_score_percent: Optional[int] = None
@@ -47,6 +49,7 @@ class DriveResponse(BaseModel):
     slots: Optional[list] = None
     total_capacity: Optional[int] = None
     test_enabled: bool
+    question_type: str = "mixed"
     questions_per_candidate: int
     test_duration_minutes: int
     passing_score_percent: int
