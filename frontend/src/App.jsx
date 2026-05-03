@@ -233,7 +233,7 @@ function App() {
             </span>
             <span style={{ margin: '0 10px', color: '#d1d5db', fontWeight: 300 }}>|</span>
             <span style={{ display: 'flex', alignItems: 'center' }}>
-              <img src={falconFLogo} alt="F" style={{ height: '38px', marginRight: '-6px' }} />
+              <img src={falconFLogo} alt="F" style={{ height: '34px', marginRight: '-6px' }} />
               <span style={{ fontSize: '1.4rem', fontWeight: 700, color: '#1e3a5f' }}>alcon</span>
             </span>
           </div>
@@ -341,7 +341,7 @@ function DashboardView({ onNavigate }) {
     >
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '3.5rem', marginBottom: '1rem', lineHeight: 1.1 }}>
-          Powering your <br />AI-<img src={falconFLogo} alt="f" style={{ height: '3rem', verticalAlign: 'middle', marginBottom: '4px', marginRight: '-4px' }} />irst hiring.
+          Powering your <br />AI-<img src={falconFLogo} alt="f" style={{ height: '2.8rem', verticalAlign: 'middle', marginBottom: '4px' }} />irst hiring.
         </h1>
         <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 2rem auto', lineHeight: 1.6 }}>
           Automatically source developers, parse resumes, and discover perfect matches with frontier models.
