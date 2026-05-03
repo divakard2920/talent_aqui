@@ -2983,12 +2983,12 @@ function WalkInsView({ showToast }) {
                             top: '100%',
                             left: 0,
                             marginTop: '4px',
-                            backgroundColor: 'var(--card-bg)',
-                            border: '1px solid var(--border-color)',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #e5e7eb',
                             borderRadius: '8px',
                             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                             zIndex: 100,
-                            minWidth: '220px',
+                            minWidth: '240px',
                             overflow: 'hidden'
                           }}
                         >
@@ -3000,19 +3000,19 @@ function WalkInsView({ showToast }) {
                             disabled={generatingQuestions}
                             style={{
                               width: '100%',
-                              padding: '10px 14px',
+                              padding: '12px 16px',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '8px',
+                              gap: '10px',
                               border: 'none',
-                              background: 'none',
-                              cursor: 'pointer',
+                              backgroundColor: '#ffffff',
+                              cursor: generatingQuestions ? 'not-allowed' : 'pointer',
                               fontSize: '0.9rem',
-                              color: 'var(--text-color)',
+                              color: '#374151',
                               textAlign: 'left'
                             }}
-                            onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--hover-bg)'}
-                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
                           >
                             {generatingQuestions ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
                             Regenerate Questions
@@ -3024,19 +3024,19 @@ function WalkInsView({ showToast }) {
                             }}
                             style={{
                               width: '100%',
-                              padding: '10px 14px',
+                              padding: '12px 16px',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '8px',
+                              gap: '10px',
                               border: 'none',
-                              background: 'none',
+                              backgroundColor: '#ffffff',
                               cursor: 'pointer',
                               fontSize: '0.9rem',
-                              color: 'var(--text-color)',
+                              color: '#374151',
                               textAlign: 'left'
                             }}
-                            onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--hover-bg)'}
-                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
                           >
                             <Download size={16} />
                             Download Questions & Answers
