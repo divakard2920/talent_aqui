@@ -2616,13 +2616,18 @@ function WalkInsView({ showToast }) {
 
     // Helper to add header to each page
     const addHeader = () => {
+      // Left side: Logo + Knorr-Bremse
       if (logoData) {
         doc.addImage(logoData, 'PNG', margin, 10, 20, 20);
       }
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(0, 51, 102);
-      doc.text('Falcon | Knorr-Bremse', margin + 25, 22);
+      doc.text('Knorr-Bremse', margin + 25, 22);
+
+      // Right side: Falcon
+      doc.setFontSize(16);
+      doc.text('Falcon', pageWidth - margin, 22, { align: 'right' });
       doc.setTextColor(0, 0, 0);
       return 40; // Starting y position after header
     };
@@ -2749,7 +2754,7 @@ function WalkInsView({ showToast }) {
       doc.setFontSize(8);
       doc.setTextColor(150, 150, 150);
       doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, 290, { align: 'center' });
-      doc.text('Confidential - Falcon | Knorr-Bremse', pageWidth - margin, 290, { align: 'right' });
+      doc.text('Confidential - Knorr-Bremse', pageWidth - margin, 290, { align: 'right' });
     }
 
     // Save PDF
