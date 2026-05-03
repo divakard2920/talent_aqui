@@ -4313,21 +4313,6 @@ function WalkInsView({ showToast }) {
         <button className="btn-sarvam" onClick={() => setShowCreateModal(true)}>
           <Plus size={18} /> Create Drive
         </button>
-        {/* Temporary test button */}
-        <button
-          className="btn-pill"
-          style={{ marginLeft: '8px' }}
-          onClick={() => setConfirmDialog({
-            isOpen: true,
-            title: 'Test Dialog',
-            message: 'This is a test to verify the confirm dialog works.',
-            type: 'warning',
-            confirmText: 'OK',
-            onConfirm: () => setConfirmDialog(prev => ({ ...prev, isOpen: false })),
-          })}
-        >
-          Test Dialog
-        </button>
       </div>
 
       {/* Search and Filter */}
@@ -4694,6 +4679,17 @@ function WalkInsView({ showToast }) {
           </button>
         </div>
       </Modal>
+
+      {/* Confirm Dialog for drive list view */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        type={confirmDialog.type || 'warning'}
+        confirmText={confirmDialog.confirmText || 'Confirm'}
+      />
     </motion.div>
   );
 }
