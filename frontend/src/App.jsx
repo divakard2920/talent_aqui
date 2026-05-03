@@ -2303,6 +2303,7 @@ function WalkInsView({ showToast }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [stats, setStats] = useState(null);
   const [generatingQuestions, setGeneratingQuestions] = useState(false);
+  const [questionsDropdownOpen, setQuestionsDropdownOpen] = useState(false);
   const [walkinRegistering, setWalkinRegistering] = useState(false);
   const [lastToken, setLastToken] = useState(null);
   const [walkinForm, setWalkinForm] = useState({
@@ -2433,6 +2434,14 @@ function WalkInsView({ showToast }) {
 
     return () => clearInterval(interval);
   }, [selectedDrive?.id, selectedDrive?.status, driveView]);
+
+  // Close questions dropdown when clicking outside
+  useEffect(() => {
+    if (!questionsDropdownOpen) return;
+    const handleClickOutside = () => setQuestionsDropdownOpen(false);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [questionsDropdownOpen]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -2958,17 +2967,89 @@ function WalkInsView({ showToast }) {
                   <Trash2 size={16} /> Delete
                 </button>
                 {selectedDrive.test_enabled && (
-                  <>
+                  selectedDrive.question_bank?.length > 0 ? (
+                    <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="btn-sarvam"
+                        onClick={() => setQuestionsDropdownOpen(!questionsDropdownOpen)}
+                      >
+                        <ClipboardList size={16} /> Questions ({selectedDrive.question_bank.length})
+                        <ChevronDown size={14} style={{ marginLeft: '4px' }} />
+                      </button>
+                      {questionsDropdownOpen && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            marginTop: '4px',
+                            backgroundColor: 'var(--card-bg)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                            zIndex: 100,
+                            minWidth: '220px',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          <button
+                            onClick={() => {
+                              handleGenerateQuestions();
+                              setQuestionsDropdownOpen(false);
+                            }}
+                            disabled={generatingQuestions}
+                            style={{
+                              width: '100%',
+                              padding: '10px 14px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              border: 'none',
+                              background: 'none',
+                              cursor: 'pointer',
+                              fontSize: '0.9rem',
+                              color: 'var(--text-color)',
+                              textAlign: 'left'
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--hover-bg)'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                          >
+                            {generatingQuestions ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+                            Regenerate Questions
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleDownloadQuestionsPDF();
+                              setQuestionsDropdownOpen(false);
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '10px 14px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              border: 'none',
+                              background: 'none',
+                              cursor: 'pointer',
+                              fontSize: '0.9rem',
+                              color: 'var(--text-color)',
+                              textAlign: 'left'
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--hover-bg)'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                          >
+                            <Download size={16} />
+                            Download Questions & Answers
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
                     <button className="btn-sarvam" onClick={handleGenerateQuestions} disabled={generatingQuestions}>
                       {generatingQuestions ? <Loader2 size={16} className="spin" /> : <ClipboardList size={16} />}
-                      {selectedDrive.question_bank?.length ? 'Regenerate Questions' : 'Generate Questions'}
+                      Generate Questions
                     </button>
-                    {selectedDrive.question_bank?.length > 0 && (
-                      <button className="btn-pill" onClick={handleDownloadQuestionsPDF}>
-                        <Download size={16} /> Download Questions & Answers
-                      </button>
-                    )}
-                  </>
+                  )
                 )}
                 <button className="btn-sarvam" onClick={() => handleUpdateStatus('registration_open')}>
                   Open Registration
