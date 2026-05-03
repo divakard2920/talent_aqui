@@ -226,7 +226,7 @@ function App() {
           <div className="flex-center" style={{ marginRight: '16px' }}>
             <img src={knorrLogo} alt="Knorr-Bremse" style={{ height: '32px', marginRight: '12px', borderRadius: '4px' }} />
             <span style={{ fontSize: '1.2rem', fontWeight: 600, fontFamily: 'var(--font-sans)', color: 'var(--brand-navy)', letterSpacing: '-0.02em' }}>
-              Knorr-Bremse <span style={{ fontWeight: 400, color: 'var(--text-primary)' }}>Talent AI</span>
+              Knorr-Bremse <span style={{ fontWeight: 400, color: 'var(--text-primary)' }}>Falcon</span>
             </span>
           </div>
 
@@ -2622,7 +2622,7 @@ function WalkInsView({ showToast }) {
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(0, 51, 102);
-      doc.text('Knorr-Bremse', margin + 25, 22);
+      doc.text('Falcon | Knorr-Bremse', margin + 25, 22);
       doc.setTextColor(0, 0, 0);
       return 40; // Starting y position after header
     };
@@ -2749,7 +2749,7 @@ function WalkInsView({ showToast }) {
       doc.setFontSize(8);
       doc.setTextColor(150, 150, 150);
       doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, 290, { align: 'center' });
-      doc.text('Confidential - Knorr-Bremse', pageWidth - margin, 290, { align: 'right' });
+      doc.text('Confidential - Falcon | Knorr-Bremse', pageWidth - margin, 290, { align: 'right' });
     }
 
     // Save PDF
