@@ -2636,12 +2636,12 @@ function WalkInsView({ showToast }) {
 
       // Right side: Falcon F logo + "alcon" text
       if (falconFLogoData) {
-        doc.addImage(falconFLogoData, 'PNG', pageWidth - margin - 42, 6, 18, 18);
+        doc.addImage(falconFLogoData, 'PNG', pageWidth - margin - 38, 6, 18, 18);
       }
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(30, 58, 95);
-      doc.text('alcon', pageWidth - margin - 22, 19);
+      doc.text('alcon', pageWidth - margin - 20, 19);
       doc.setTextColor(0, 0, 0);
       return 40; // Starting y position after header
     };
