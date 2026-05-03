@@ -2965,7 +2965,7 @@ function WalkInsView({ showToast }) {
                     </button>
                     {selectedDrive.question_bank?.length > 0 && (
                       <button className="btn-pill" onClick={handleDownloadQuestionsPDF}>
-                        <Download size={16} /> Download PDF
+                        <Download size={16} /> Download Questions & Answers
                       </button>
                     )}
                   </>
