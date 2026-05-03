@@ -5551,19 +5551,28 @@ function CandidateTestPortal({ driveId }) {
       const res = await walkinApi.lookupCandidate(driveId, { phone: phone.trim() });
       setCandidate(res.data);
 
-      // First check drive status (applies to both test-enabled and test-disabled)
-      if (res.data.drive_status === 'completed') {
-        setError('This drive has ended. Please contact HR for any queries.');
-      } else if (res.data.drive_status !== 'ongoing') {
-        setError('Drive has not started yet. Please wait for the drive to begin.');
-      } else if (res.data.test_completed) {
+      // Check if candidate has completed test or has interview - they can always check status
+      const hasCompletedActivity = res.data.test_completed || res.data.interview_status;
+
+      if (res.data.test_completed) {
+        // Candidate completed test - show their result
         setResult({
           score: res.data.test_score,
           passed: res.data.test_passed,
         });
         setStage('result');
+      } else if (!res.data.test_enabled && hasCompletedActivity) {
+        // No test drive, but candidate has interview activity - show status
+        setResult({ passed: true, noTest: true });
+        setStage('result');
+      } else if (res.data.drive_status === 'completed') {
+        // Drive ended and candidate hasn't done anything
+        setError('This drive has ended. Please contact HR for any queries.');
+      } else if (res.data.drive_status !== 'ongoing') {
+        // Drive not started yet
+        setError('Drive has not started yet. Please wait for the drive to begin.');
       } else if (!res.data.test_enabled) {
-        // No test - candidate is auto-shortlisted for interview
+        // No test, drive is ongoing - can start interview
         setResult({ passed: true, noTest: true });
         setStage('result');
       } else if (res.data.test_started && res.data.remaining_seconds > 0) {
