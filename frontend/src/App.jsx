@@ -5551,7 +5551,12 @@ function CandidateTestPortal({ driveId }) {
       const res = await walkinApi.lookupCandidate(driveId, { phone: phone.trim() });
       setCandidate(res.data);
 
-      if (res.data.test_completed) {
+      // First check drive status (applies to both test-enabled and test-disabled)
+      if (res.data.drive_status === 'completed') {
+        setError('This drive has ended. Please contact HR for any queries.');
+      } else if (res.data.drive_status !== 'ongoing') {
+        setError('Drive has not started yet. Please wait for the drive to begin.');
+      } else if (res.data.test_completed) {
         setResult({
           score: res.data.test_score,
           passed: res.data.test_passed,
@@ -5561,10 +5566,6 @@ function CandidateTestPortal({ driveId }) {
         // No test - candidate is auto-shortlisted for interview
         setResult({ passed: true, noTest: true });
         setStage('result');
-      } else if (res.data.drive_status === 'completed') {
-        setError('This drive has ended. Please contact HR for any queries.');
-      } else if (res.data.drive_status !== 'ongoing') {
-        setError('Test is not available yet. Please wait for the drive to start.');
       } else if (res.data.test_started && res.data.remaining_seconds > 0) {
         // Test was started but not completed - resume it
         setStage('resuming');
