@@ -1200,12 +1200,15 @@ async def start_walkin_interview(
     if registration.status != RegistrationStatus.SHORTLISTED.value:
         raise HTTPException(status_code=400, detail="Candidate must be shortlisted to start interview")
 
-    # Check if candidate already exists (by email)
-    result = await db.execute(
-        select(Candidate).where(Candidate.email == registration.email)
-    )
-    candidate = result.scalar_one_or_none()
+    # Check if this registration already has a linked candidate
+    candidate = None
+    if registration.candidate_id:
+        result = await db.execute(
+            select(Candidate).where(Candidate.id == registration.candidate_id)
+        )
+        candidate = result.scalar_one_or_none()
 
+    # Create a NEW candidate for this registration (each walk-in registration gets its own candidate)
     if not candidate:
         # Parse resume if available
         parsed_data = None
@@ -1230,7 +1233,7 @@ async def start_walkin_interview(
                 # Log error but don't fail - candidate can still proceed
                 print(f"Error parsing resume for registration {registration_id}: {e}")
 
-        # Create new candidate record with parsed data
+        # Create new candidate record specific to this registration
         candidate = Candidate(
             name=registration.name,
             email=registration.email,
@@ -1245,8 +1248,8 @@ async def start_walkin_interview(
         await db.commit()
         await db.refresh(candidate)
 
-    # Link candidate to registration
-    registration.candidate_id = candidate.id
+        # Link candidate to this registration
+        registration.candidate_id = candidate.id
 
     # Check if THIS registration already has an interview
     if registration.interview_id:
