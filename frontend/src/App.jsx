@@ -41,6 +41,7 @@ import {
 import './index.css';
 import knorrLogo from './assets/knorr.png';
 import falconLogo from './assets/falcon-logo.png';
+import falconHead from './assets/falcon-head.png';
 import { jsPDF } from 'jspdf';
 import { jobsApi, candidatesApi, resumeApi, githubApi, interviewApi, walkinApi } from './services/api';
 import { Modal, JobForm, GitHubSearchForm, GitHubCandidateCard, ResumeUpload, CandidateResult, ConfirmDialog, InterviewRoom } from './components';
@@ -230,7 +231,10 @@ function App() {
               Knorr-Bremse
             </span>
             <span style={{ margin: '0 10px', color: '#d1d5db', fontWeight: 300 }}>|</span>
-            <img src={falconLogo} alt="Falcon" style={{ height: '48px' }} />
+            <span style={{ display: 'flex', alignItems: 'center' }}>
+              <img src={falconHead} alt="F" style={{ height: '42px', marginRight: '-4px' }} />
+              <span style={{ fontSize: '1.4rem', fontWeight: 700, color: '#1e3a5f' }}>alcon</span>
+            </span>
           </div>
 
           <nav style={{ display: 'flex', gap: '8px' }}>
@@ -336,7 +340,7 @@ function DashboardView({ onNavigate }) {
     >
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '3.5rem', marginBottom: '1rem', lineHeight: 1.1 }}>
-          Powering your <br />AI-first hiring.
+          Powering your <br />AI-<img src={falconHead} alt="f" style={{ height: '3.5rem', verticalAlign: 'middle', marginBottom: '4px' }} />irst hiring.
         </h1>
         <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 2rem auto', lineHeight: 1.6 }}>
           Automatically source developers, parse resumes, and discover perfect matches with frontier models.
@@ -2616,7 +2620,7 @@ function WalkInsView({ showToast }) {
     };
 
     const logoData = await loadImage(knorrLogo);
-    const falconLogoData = await loadImage(falconLogo);
+    const falconHeadData = await loadImage(falconHead);
 
     // Helper to add header to each page
     const addHeader = () => {
@@ -2629,10 +2633,14 @@ function WalkInsView({ showToast }) {
       doc.setTextColor(0, 51, 102);
       doc.text('Knorr-Bremse', margin + 25, 22);
 
-      // Right side: Falcon logo
-      if (falconLogoData) {
-        doc.addImage(falconLogoData, 'PNG', pageWidth - margin - 45, 8, 45, 20);
+      // Right side: Falcon head + "alcon" text
+      if (falconHeadData) {
+        doc.addImage(falconHeadData, 'PNG', pageWidth - margin - 38, 8, 18, 16);
       }
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 58, 95);
+      doc.text('alcon', pageWidth - margin - 18, 20);
       doc.setTextColor(0, 0, 0);
       return 40; // Starting y position after header
     };
