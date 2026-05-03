@@ -2303,9 +2303,6 @@ function WalkInsView({ showToast }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [stats, setStats] = useState(null);
   const [generatingQuestions, setGeneratingQuestions] = useState(false);
-  const [questionsDropdownOpen, setQuestionsDropdownOpen] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
-  const questionsButtonRef = React.useRef(null);
   const [walkinRegistering, setWalkinRegistering] = useState(false);
   const [lastToken, setLastToken] = useState(null);
   const [walkinForm, setWalkinForm] = useState({
@@ -2436,14 +2433,6 @@ function WalkInsView({ showToast }) {
 
     return () => clearInterval(interval);
   }, [selectedDrive?.id, selectedDrive?.status, driveView]);
-
-  // Close questions dropdown when clicking outside
-  useEffect(() => {
-    if (!questionsDropdownOpen) return;
-    const handleClickOutside = () => setQuestionsDropdownOpen(false);
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, [questionsDropdownOpen]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -2970,87 +2959,28 @@ function WalkInsView({ showToast }) {
                 </button>
                 {selectedDrive.test_enabled && (
                   selectedDrive.question_bank?.length > 0 ? (
-                    <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: '0' }}>
                       <button
-                        ref={questionsButtonRef}
                         className="btn-sarvam"
-                        onClick={() => {
-                          if (!questionsDropdownOpen && questionsButtonRef.current) {
-                            const rect = questionsButtonRef.current.getBoundingClientRect();
-                            setDropdownPosition({ top: rect.bottom + 4, left: rect.left });
-                          }
-                          setQuestionsDropdownOpen(!questionsDropdownOpen);
+                        onClick={handleGenerateQuestions}
+                        disabled={generatingQuestions}
+                        style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                      >
+                        {generatingQuestions ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+                        Regenerate
+                      </button>
+                      <button
+                        className="btn-pill"
+                        onClick={handleDownloadQuestionsPDF}
+                        style={{
+                          borderTopLeftRadius: 0,
+                          borderBottomLeftRadius: 0,
+                          borderLeft: 'none',
+                          backgroundColor: '#f8fafc'
                         }}
                       >
-                        <ClipboardList size={16} /> Questions ({selectedDrive.question_bank.length})
-                        <ChevronDown size={14} style={{ marginLeft: '4px' }} />
+                        <Download size={16} />
                       </button>
-                      {questionsDropdownOpen && (
-                        <div
-                          style={{
-                            position: 'fixed',
-                            top: dropdownPosition.top,
-                            left: dropdownPosition.left,
-                            backgroundColor: '#ffffff',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '8px',
-                            boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-                            zIndex: 9999,
-                            minWidth: '240px',
-                            overflow: 'hidden'
-                          }}
-                        >
-                          <button
-                            onClick={() => {
-                              handleGenerateQuestions();
-                              setQuestionsDropdownOpen(false);
-                            }}
-                            disabled={generatingQuestions}
-                            style={{
-                              width: '100%',
-                              padding: '12px 16px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '10px',
-                              border: 'none',
-                              backgroundColor: '#ffffff',
-                              cursor: generatingQuestions ? 'not-allowed' : 'pointer',
-                              fontSize: '0.9rem',
-                              color: '#374151',
-                              textAlign: 'left'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
-                          >
-                            {generatingQuestions ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
-                            Regenerate Questions
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleDownloadQuestionsPDF();
-                              setQuestionsDropdownOpen(false);
-                            }}
-                            style={{
-                              width: '100%',
-                              padding: '12px 16px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '10px',
-                              border: 'none',
-                              backgroundColor: '#ffffff',
-                              cursor: 'pointer',
-                              fontSize: '0.9rem',
-                              color: '#374151',
-                              textAlign: 'left'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
-                          >
-                            <Download size={16} />
-                            Download Questions & Answers
-                          </button>
-                        </div>
-                      )}
                     </div>
                   ) : (
                     <button className="btn-sarvam" onClick={handleGenerateQuestions} disabled={generatingQuestions}>
