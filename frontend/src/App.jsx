@@ -2641,7 +2641,7 @@ function WalkInsView({ showToast }) {
       const falconTextWidth = doc.getTextWidth('alcon');
       doc.text('alcon', pageWidth - margin - falconTextWidth, 18);
       if (falconFLogoData) {
-        doc.addImage(falconFLogoData, 'PNG', pageWidth - margin - falconTextWidth - 6, 7, 14, 14);
+        doc.addImage(falconFLogoData, 'PNG', pageWidth - margin - falconTextWidth - 10, 8, 10, 11);
       }
       doc.setTextColor(0, 0, 0);
       return 40; // Starting y position after header
