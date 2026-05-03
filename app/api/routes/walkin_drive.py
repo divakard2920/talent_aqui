@@ -1200,6 +1200,29 @@ async def start_walkin_interview(
     if registration.status != RegistrationStatus.SHORTLISTED.value:
         raise HTTPException(status_code=400, detail="Candidate must be shortlisted to start interview")
 
+    # Parse resume if available (do this first so we have the data ready)
+    parsed_data = None
+    resume_text = None
+    resume_path = registration.resume_path if hasattr(registration, 'resume_path') and registration.resume_path else None
+
+    if resume_path:
+        try:
+            import os
+            if os.path.exists(resume_path):
+                # Extract text from PDF
+                resume_text = pdf_parser.extract_text(resume_path)
+                if resume_text:
+                    # Parse resume using AI
+                    parsed_resume = resume_analyzer.parse_resume(resume_text)
+                    parsed_data = parsed_resume.model_dump()
+                    # Generate AI assessment
+                    ai_assessment = resume_analyzer.generate_ai_assessment(parsed_resume)
+                    if ai_assessment:
+                        parsed_data["ai_assessment"] = ai_assessment
+        except Exception as e:
+            # Log error but don't fail - candidate can still proceed
+            print(f"Error parsing resume for registration {registration_id}: {e}")
+
     # Check if this registration already has a linked candidate
     candidate = None
     if registration.candidate_id:
@@ -1208,32 +1231,29 @@ async def start_walkin_interview(
         )
         candidate = result.scalar_one_or_none()
 
-    # Create a NEW candidate for this registration (each walk-in registration gets its own candidate)
+    # If not linked, check if candidate exists by email
     if not candidate:
-        # Parse resume if available
-        parsed_data = None
-        resume_text = None
-        resume_path = registration.resume_path if hasattr(registration, 'resume_path') and registration.resume_path else None
+        result = await db.execute(
+            select(Candidate).where(Candidate.email == registration.email)
+        )
+        candidate = result.scalar_one_or_none()
 
+    if candidate:
+        # UPDATE existing candidate with this registration's data
+        candidate.name = registration.name
+        candidate.phone = registration.phone
         if resume_path:
-            try:
-                import os
-                if os.path.exists(resume_path):
-                    # Extract text from PDF
-                    resume_text = pdf_parser.extract_text(resume_path)
-                    if resume_text:
-                        # Parse resume using AI
-                        parsed_resume = resume_analyzer.parse_resume(resume_text)
-                        parsed_data = parsed_resume.model_dump()
-                        # Generate AI assessment
-                        ai_assessment = resume_analyzer.generate_ai_assessment(parsed_resume)
-                        if ai_assessment:
-                            parsed_data["ai_assessment"] = ai_assessment
-            except Exception as e:
-                # Log error but don't fail - candidate can still proceed
-                print(f"Error parsing resume for registration {registration_id}: {e}")
-
-        # Create new candidate record specific to this registration
+            candidate.resume_file_path = resume_path
+        if resume_text:
+            candidate.resume_text = resume_text
+        if parsed_data:
+            candidate.parsed_data = parsed_data
+        candidate.source = "walkin_drive"
+        candidate.source_id = f"drive_{drive_id}_reg_{registration_id}"
+        await db.commit()
+        await db.refresh(candidate)
+    else:
+        # CREATE new candidate
         candidate = Candidate(
             name=registration.name,
             email=registration.email,
@@ -1248,8 +1268,8 @@ async def start_walkin_interview(
         await db.commit()
         await db.refresh(candidate)
 
-        # Link candidate to this registration
-        registration.candidate_id = candidate.id
+    # Link candidate to this registration
+    registration.candidate_id = candidate.id
 
     # Check if THIS registration already has an interview
     if registration.interview_id:
