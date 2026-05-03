@@ -6079,7 +6079,7 @@ function CandidateTestPortal({ driveId }) {
               </div>
             )}
 
-            {result.noTest && candidate?.interview_status === 'completed' && candidate?.status !== 'approved_l2' && (
+            {result.noTest && candidate?.interview_status === 'completed' && candidate?.status !== 'approved_l2' && candidate?.status !== 'rejected' && candidate?.status !== 'on_hold' && (
               <div style={{
                 marginTop: '16px',
                 padding: '20px',
