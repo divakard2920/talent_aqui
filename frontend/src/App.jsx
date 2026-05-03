@@ -2328,7 +2328,7 @@ function WalkInsView({ showToast }) {
     passing_score_percent: 60,
   });
   const [showEditModal, setShowEditModal] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, type: 'warning', confirmText: 'Confirm' });
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [driveInterviews, setDriveInterviews] = useState([]);
   const [loadingInterviews, setLoadingInterviews] = useState(false);
@@ -2480,7 +2480,7 @@ function WalkInsView({ showToast }) {
     }
   };
 
-  const handleCreateDrive = async () => {
+  const handleCreateDrive = async (force = false) => {
     if (!formData.job_id || !formData.title || !formData.drive_date) {
       showToast('Please fill all required fields', 'error');
       return;
@@ -2493,7 +2493,7 @@ function WalkInsView({ showToast }) {
         drive_date: new Date(formData.drive_date).toISOString(),
         total_capacity: formData.total_capacity ? parseInt(formData.total_capacity) : null,
       };
-      const res = await walkinApi.create(payload);
+      const res = await walkinApi.create(payload, force);
       setDrives(prev => [res.data, ...prev]);
       setShowCreateModal(false);
       setFormData({
@@ -2508,6 +2508,23 @@ function WalkInsView({ showToast }) {
       });
       showToast('Walk-in drive created!');
     } catch (err) {
+      // Handle duplicate drive conflict
+      if (err.response?.status === 409) {
+        const detail = err.response.data.detail;
+        const existingDrive = detail.existing_drive;
+        setConfirmDialog({
+          isOpen: true,
+          title: 'Duplicate Drive Detected',
+          message: `${detail.message}.\n\nExisting drive: "${existingDrive.title}" (${existingDrive.status})\n\nDo you still want to create a new drive?`,
+          type: 'warning',
+          confirmText: 'Create Anyway',
+          onConfirm: async () => {
+            setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+            await handleCreateDrive(true); // Retry with force=true
+          },
+        });
+        return;
+      }
       showToast(err.response?.data?.detail || 'Failed to create drive', 'error');
     }
   };
@@ -2622,6 +2639,8 @@ function WalkInsView({ showToast }) {
       isOpen: true,
       title: 'Delete Walk-in Drive',
       message: `Are you sure you want to delete "${selectedDrive.title}"? This will also delete all registrations.`,
+      type: 'danger',
+      confirmText: 'Delete',
       onConfirm: async () => {
         try {
           await walkinApi.delete(selectedDrive.id);
@@ -4176,7 +4195,8 @@ function WalkInsView({ showToast }) {
         onConfirm={confirmDialog.onConfirm}
         title={confirmDialog.title}
         message={confirmDialog.message}
-        type="danger"
+        type={confirmDialog.type || 'warning'}
+        confirmText={confirmDialog.confirmText || 'Confirm'}
       />
 
       {/* Edit Drive Modal (for detail view) */}

@@ -77,7 +77,7 @@ export const walkinApi = {
   // Drive management
   list: (params = {}) => api.get('/walkin-drives/', { params }),
   get: (id) => api.get(`/walkin-drives/${id}`),
-  create: (data) => api.post('/walkin-drives/', data),
+  create: (data, force = false) => api.post(`/walkin-drives/?force=${force}`, data),
   update: (id, data) => api.patch(`/walkin-drives/${id}`, data),
   delete: (id) => api.delete(`/walkin-drives/${id}`),
 

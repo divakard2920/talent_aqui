@@ -40,13 +40,41 @@ def generate_slug(title: str) -> str:
 # --- Drive Management ---
 
 @router.post("/", response_model=DriveResponse)
-async def create_drive(request: DriveCreate, db: AsyncSession = Depends(get_db)):
+async def create_drive(
+    request: DriveCreate,
+    force: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
     """Create a new walk-in drive."""
     # Verify job exists
     result = await db.execute(select(Job).where(Job.id == request.job_id))
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Check for duplicate drive (same job, same date) unless force=True
+    if not force:
+        # Check if there's a drive for the same job on the same date
+        drive_date = request.drive_date.date() if hasattr(request.drive_date, 'date') else request.drive_date
+        result = await db.execute(
+            select(WalkInDrive).where(
+                WalkInDrive.job_id == request.job_id,
+                func.date(WalkInDrive.drive_date) == drive_date,
+            )
+        )
+        existing_drive = result.scalar_one_or_none()
+        if existing_drive:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": f"A drive for this job already exists on {drive_date}",
+                    "existing_drive": {
+                        "id": existing_drive.id,
+                        "title": existing_drive.title,
+                        "status": existing_drive.status,
+                    }
+                }
+            )
 
     drive = WalkInDrive(
         job_id=request.job_id,
