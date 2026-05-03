@@ -2635,13 +2635,14 @@ function WalkInsView({ showToast }) {
       doc.text('Knorr-Bremse', margin + 25, 22);
 
       // Right side: Falcon F logo + "alcon" text
-      if (falconFLogoData) {
-        doc.addImage(falconFLogoData, 'PNG', pageWidth - margin - 33, 6, 16, 16);
-      }
+      const falconTextWidth = doc.getTextWidth('alcon');
       doc.setFontSize(15);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(30, 58, 95);
-      doc.text('alcon', pageWidth - margin - 17, 18);
+      doc.text('alcon', pageWidth - margin - falconTextWidth, 18);
+      if (falconFLogoData) {
+        doc.addImage(falconFLogoData, 'PNG', pageWidth - margin - falconTextWidth - 12, 7, 14, 14);
+      }
       doc.setTextColor(0, 0, 0);
       return 40; // Starting y position after header
     };
