@@ -6028,7 +6028,7 @@ function CandidateTestPortal({ driveId }) {
 
             <p style={{ color: '#6B7280', margin: '0 0 24px', fontSize: '1.1rem' }}>
               {result.noTest
-                ? 'You have been checked in and shortlisted for the interview.'
+                ? 'You have been checked in successfully.'
                 : (result.passed
                   ? 'You have passed the assessment!'
                   : 'Thank you for taking the assessment.')}
@@ -6051,8 +6051,91 @@ function CandidateTestPortal({ driveId }) {
               </>
             )}
 
-            {/* Status-specific next steps */}
-            {candidate?.status === 'approved_l2' && (
+            {/* No test - show appropriate status based on interview state */}
+            {result.noTest && candidate?.status === 'approved_l2' && (
+              <div style={{
+                marginTop: '16px',
+                padding: '20px',
+                background: '#DCFCE7',
+                border: '1px solid #10B981',
+                borderRadius: '12px',
+              }}>
+                <h3 style={{ margin: '0 0 12px', color: '#166534', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CheckCircle size={24} /> Congratulations! You've been selected for L2 Interview
+                </h3>
+                <p style={{ margin: 0, color: '#166534' }}>
+                  You have successfully cleared the L1 interview with Devin. Our HR team will contact you shortly to schedule your L2 interview.
+                </p>
+              </div>
+            )}
+
+            {result.noTest && candidate?.interview_status === 'completed' && candidate?.status !== 'approved_l2' && (
+              <div style={{
+                marginTop: '16px',
+                padding: '20px',
+                background: '#EEF2FF',
+                border: '1px solid #6366F1',
+                borderRadius: '12px',
+              }}>
+                <h3 style={{ margin: '0 0 12px', color: '#4338CA', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Clock size={24} /> Interview Completed - Under Review
+                </h3>
+                <p style={{ margin: 0, color: '#4338CA' }}>
+                  Thank you for completing your interview with Devin. Our team is reviewing your interview and will update you shortly.
+                </p>
+              </div>
+            )}
+
+            {result.noTest && candidate?.interview_status !== 'completed' && candidate?.status !== 'approved_l2' && (
+              <div style={{
+                marginTop: '16px',
+                padding: '20px',
+                background: '#DCFCE7',
+                border: '1px solid #10B981',
+                borderRadius: '12px',
+              }}>
+                <h3 style={{ margin: '0 0 12px', color: '#166534' }}>Ready for Interview</h3>
+                <p style={{ margin: '0 0 16px', color: '#166534' }}>
+                  {candidate?.interview_status
+                    ? 'Continue your Level 1 Interview with Devin.'
+                    : 'Click below to start your Level 1 Interview with Devin.'}
+                </p>
+                <button
+                  onClick={async () => {
+                    try {
+                      setLoading(true);
+                      const res = await walkinApi.startInterview(driveId, candidate.registration_id);
+                      window.location.href = `/?interview=${res.data.interview_id}`;
+                    } catch (err) {
+                      setError(err.response?.data?.detail || 'Failed to start interview');
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 24px',
+                    background: loading ? '#9CA3AF' : '#166534',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    width: '100%',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {loading ? <Loader2 size={18} className="spin" /> : <Phone size={18} />}
+                  {loading ? 'Loading...' : (candidate?.interview_status ? 'Resume Interview with Devin' : 'Start Interview with Devin')}
+                </button>
+              </div>
+            )}
+
+            {/* Status-specific next steps - only for test-enabled drives */}
+            {!result.noTest && candidate?.status === 'approved_l2' && (
               <div style={{
                 marginTop: '32px',
                 padding: '20px',
@@ -6069,7 +6152,7 @@ function CandidateTestPortal({ driveId }) {
               </div>
             )}
 
-            {candidate?.status === 'shortlisted' && candidate?.interview_status === 'completed' && (
+            {!result.noTest && candidate?.status === 'shortlisted' && candidate?.interview_status === 'completed' && (
               <div style={{
                 marginTop: '32px',
                 padding: '20px',
@@ -6086,7 +6169,7 @@ function CandidateTestPortal({ driveId }) {
               </div>
             )}
 
-            {candidate?.status === 'shortlisted' && candidate?.interview_status !== 'completed' && (
+            {!result.noTest && candidate?.status === 'shortlisted' && candidate?.interview_status !== 'completed' && (
               <div style={{
                 marginTop: '32px',
                 padding: '20px',
