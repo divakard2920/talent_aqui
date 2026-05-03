@@ -228,27 +228,17 @@ function App() {
             <span style={{ fontSize: '1.2rem', fontWeight: 600, fontFamily: 'var(--font-sans)', color: 'var(--brand-navy)', letterSpacing: '-0.02em' }}>
               Knorr-Bremse
             </span>
-            <span style={{ margin: '0 8px', color: '#d1d5db', fontWeight: 300 }}>|</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-              <svg width="22" height="26" viewBox="0 0 24 28" fill="none">
-                {/* Falcon head profile - looks like F */}
-                {/* Head curve */}
-                <path d="M4 2 C12 2 14 4 14 8 C14 10 12 11 10 11 L4 11" fill="#1e3a5f"/>
-                {/* Beak - sharp pointed */}
-                <path d="M14 6 L22 8 L14 10 Z" fill="#f59e0b"/>
-                {/* Eye */}
-                <circle cx="10" cy="6" r="1.5" fill="#ffffff"/>
-                <circle cx="10" cy="6" r="0.8" fill="#1e3a5f"/>
-                {/* Neck/Body going down like F stem */}
-                <path d="M4 11 L4 26 C4 26 6 26 6 24 L6 11" fill="#1e3a5f"/>
-                {/* Chest feathers - middle bar of F */}
-                <path d="M6 16 L12 16 L14 18 L12 20 L6 20 Z" fill="#1e3a5f"/>
+            <span style={{ margin: '0 10px', color: '#d1d5db', fontWeight: 300 }}>|</span>
+            <span style={{ display: 'flex', alignItems: 'center' }}>
+              <svg width="24" height="24" viewBox="0 0 64 64" fill="#1e3a5f" style={{ marginRight: '2px' }}>
+                {/* Clean falcon head silhouette */}
+                <path d="M16 8 C24 4 36 6 42 14 C44 17 44 20 42 22 L56 26 L42 30 C40 32 36 34 32 34 C28 34 24 32 20 28 L16 32 L16 56 C16 58 14 60 12 60 C10 60 8 58 8 56 L8 20 C8 12 12 8 16 8 Z M32 16 C34 16 36 18 36 20 C36 22 34 24 32 24 C30 24 28 22 28 20 C28 18 30 16 32 16 Z"/>
               </svg>
               <span style={{
-                fontSize: '1.25rem',
+                fontSize: '1.3rem',
                 fontWeight: 700,
                 color: '#1e3a5f',
-                letterSpacing: '0.01em'
+                letterSpacing: '0.02em'
               }}>
                 alcon
               </span>
