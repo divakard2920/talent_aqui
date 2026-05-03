@@ -1218,6 +1218,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   const [currentInterview, setCurrentInterview] = useState(null);
   const [interviewJob, setInterviewJob] = useState(null);
   const [creatingInterview, setCreatingInterview] = useState(false);
+  const [generatedInterviewLink, setGeneratedInterviewLink] = useState(null);
 
   // URL state helper
   const updateUrl = (candidateId) => {
@@ -1359,6 +1360,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setSelectedCandidate(null);
     setCandidateMatches([]);
     setShowAllSkills(false);
+    setGeneratedInterviewLink(null);
   };
 
   const [interviewCandidate, setInterviewCandidate] = useState(null);
@@ -1371,11 +1373,10 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setCreatingInterview(true);
     try {
       const res = await interviewApi.create(candidateId, jobId);
-      setCurrentInterview(res.data);
-      setInterviewJob(job);
-      setInterviewCandidate(candidate);
-      setShowDetailModal(false);  // Close detail modal but keep candidate data
-      setShowInterviewModal(true);
+      // Generate unique interview link for the candidate
+      const interviewLink = `${window.location.origin}/?interview=${res.data.id}`;
+      setGeneratedInterviewLink({ link: interviewLink, jobTitle: job.title });
+      showToast('Interview link generated! Share it with the candidate.', 'success');
     } catch (err) {
       showToast(err.response?.data?.detail || 'Failed to schedule screening call', 'error');
     } finally {
@@ -1771,20 +1772,84 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
                 <p style={{ margin: '0 0 12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   Connect this candidate with Devin for an initial screening call
                 </p>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {jobs.filter(j => j.status === 'open').map(job => (
+                {generatedInterviewLink ? (
+                  <div style={{
+                    padding: '16px',
+                    background: '#F0FDF4',
+                    border: '1px solid #22C55E',
+                    borderRadius: '12px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <CheckCircle size={18} style={{ color: '#22C55E' }} />
+                      <span style={{ fontWeight: 600, color: '#166534' }}>
+                        Interview link generated for {generatedInterviewLink.jobTitle}
+                      </span>
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      alignItems: 'center',
+                      background: 'white',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #E5E7EB'
+                    }}>
+                      <input
+                        type="text"
+                        value={generatedInterviewLink.link}
+                        readOnly
+                        style={{
+                          flex: 1,
+                          border: 'none',
+                          outline: 'none',
+                          fontSize: '0.85rem',
+                          color: '#374151',
+                          background: 'transparent'
+                        }}
+                      />
+                      <button
+                        className="btn-sarvam"
+                        style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                        onClick={() => {
+                          navigator.clipboard.writeText(generatedInterviewLink.link);
+                          showToast('Link copied to clipboard!', 'success');
+                        }}
+                      >
+                        Copy Link
+                      </button>
+                    </div>
                     <button
-                      key={job.id}
-                      className="btn-sarvam"
-                      style={{ fontSize: '0.85rem', padding: '8px 16px' }}
-                      onClick={() => handleScheduleInterview(selectedCandidate.id, job.id)}
-                      disabled={creatingInterview}
+                      style={{
+                        marginTop: '12px',
+                        padding: '6px 12px',
+                        fontSize: '0.8rem',
+                        background: 'none',
+                        border: 'none',
+                        color: '#6B7280',
+                        cursor: 'pointer',
+                        textDecoration: 'underline'
+                      }}
+                      onClick={() => setGeneratedInterviewLink(null)}
                     >
-                      {creatingInterview ? <Loader2 size={14} className="spin" /> : null}
-                      Screen for {job.title}
+                      Generate for another job
                     </button>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {jobs.filter(j => j.status === 'open').map(job => (
+                      <button
+                        key={job.id}
+                        className="btn-sarvam"
+                        style={{ fontSize: '0.85rem', padding: '8px 16px' }}
+                        onClick={() => handleScheduleInterview(selectedCandidate.id, job.id)}
+                        disabled={creatingInterview}
+                      >
+                        {creatingInterview ? <Loader2 size={14} className="spin" /> : null}
+                        Screen for {job.title}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
