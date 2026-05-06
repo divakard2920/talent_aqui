@@ -57,13 +57,30 @@ async def get_candidate_matches(
 
 @router.delete("/{candidate_id}")
 async def delete_candidate(candidate_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a candidate."""
+    """Delete a candidate and all associated records."""
+    from app.models.interview import Interview
+    from app.models.walkin_drive import DriveRegistration
+
     result = await db.execute(select(Candidate).where(Candidate.id == candidate_id))
     candidate = result.scalar_one_or_none()
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    # Delete associated matches first
+    # Delete associated interviews first
+    await db.execute(
+        Interview.__table__.delete().where(
+            Interview.candidate_id == candidate_id
+        )
+    )
+
+    # Clear candidate_id from drive registrations (don't delete registrations)
+    await db.execute(
+        DriveRegistration.__table__.update()
+        .where(DriveRegistration.candidate_id == candidate_id)
+        .values(candidate_id=None, interview_id=None)
+    )
+
+    # Delete associated matches
     await db.execute(
         CandidateJobMatch.__table__.delete().where(
             CandidateJobMatch.candidate_id == candidate_id
