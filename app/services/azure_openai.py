@@ -1,4 +1,5 @@
 from openai import AzureOpenAI
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 import json
 
 from app.config import get_settings
@@ -10,11 +11,24 @@ class AzureOpenAIService:
     """Service for interacting with Azure OpenAI."""
 
     def __init__(self):
-        self.client = AzureOpenAI(
-            api_key=settings.azure_openai_api_key,
-            api_version=settings.azure_openai_api_version,
-            azure_endpoint=settings.azure_openai_endpoint,
-        )
+        if settings.azure_openai_auth_mode == "aad":
+            # Use Azure AD authentication (DefaultAzureCredential)
+            credential = DefaultAzureCredential()
+            token_provider = get_bearer_token_provider(
+                credential, "https://cognitiveservices.azure.com/.default"
+            )
+            self.client = AzureOpenAI(
+                azure_ad_token_provider=token_provider,
+                api_version=settings.azure_openai_api_version,
+                azure_endpoint=settings.azure_openai_endpoint,
+            )
+        else:
+            # Use API key authentication
+            self.client = AzureOpenAI(
+                api_key=settings.azure_openai_api_key,
+                api_version=settings.azure_openai_api_version,
+                azure_endpoint=settings.azure_openai_endpoint,
+            )
         self.deployment_name = settings.azure_openai_deployment_name
 
     def chat_completion(

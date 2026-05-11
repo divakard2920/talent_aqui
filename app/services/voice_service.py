@@ -9,6 +9,7 @@ import tempfile
 import os
 import time
 from openai import AzureOpenAI
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from app.config import get_settings
 
 settings = get_settings()
@@ -32,19 +33,36 @@ class VoiceService:
 
     def _initialize_client(self):
         """Initialize the Azure OpenAI client for voice services."""
-        # Use voice-specific endpoint/key if provided, otherwise fall back to main endpoint
+        # Use voice-specific endpoint if provided, otherwise fall back to main endpoint
         azure_endpoint = settings.azure_openai_voice_endpoint or settings.azure_openai_endpoint
-        azure_key = settings.azure_openai_voice_key or settings.azure_openai_api_key
 
-        if azure_endpoint and azure_key:
+        if not azure_endpoint:
+            raise Exception(
+                "Azure OpenAI Voice not configured. Set AZURE_OPENAI_VOICE_ENDPOINT or AZURE_OPENAI_ENDPOINT."
+            )
+
+        if settings.azure_openai_auth_mode == "aad":
+            # Use Azure AD authentication (DefaultAzureCredential)
+            credential = DefaultAzureCredential()
+            token_provider = get_bearer_token_provider(
+                credential, "https://cognitiveservices.azure.com/.default"
+            )
             self.client = AzureOpenAI(
-                api_key=azure_key,
+                azure_ad_token_provider=token_provider,
                 api_version="2025-01-01-preview",  # Version that supports TTS/Whisper
                 azure_endpoint=azure_endpoint,
             )
         else:
-            raise Exception(
-                "Azure OpenAI Voice not configured. Set AZURE_OPENAI_VOICE_ENDPOINT and AZURE_OPENAI_VOICE_KEY."
+            # Use API key authentication
+            azure_key = settings.azure_openai_api_key
+            if not azure_key:
+                raise Exception(
+                    "Azure OpenAI API key not configured. Set AZURE_OPENAI_API_KEY."
+                )
+            self.client = AzureOpenAI(
+                api_key=azure_key,
+                api_version="2025-01-01-preview",  # Version that supports TTS/Whisper
+                azure_endpoint=azure_endpoint,
             )
 
     def text_to_speech(self, text: str) -> str:
