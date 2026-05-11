@@ -3116,11 +3116,16 @@ function InterviewsView({ showToast }) {
           interviewApi.list(),
           candidatesApi.list(),
         ]);
-        setJobs(jobsRes.data);
-        setInterviews(interviewsRes.data);
-        setCandidates(candidatesRes.data);
+        setJobs(jobsRes.data || []);
+        setInterviews(interviewsRes.data || []);
+        setCandidates(candidatesRes.data || []);
       } catch (err) {
         console.error('Failed to fetch data:', err);
+        showToast('Failed to load interviews. Please refresh the page.', 'error');
+        // Set empty arrays to prevent crashes
+        setJobs([]);
+        setInterviews([]);
+        setCandidates([]);
       } finally {
         setLoading(false);
       }
@@ -6615,6 +6620,53 @@ function CandidateTestPortal({ driveId }) {
   const [timeLeft, setTimeLeft] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+
+  // Prevent browser refresh/close during test
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (stage === 'test') {
+        e.preventDefault();
+        e.returnValue = 'Test in progress! If you leave, your answers may not be saved. Are you sure?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [stage]);
+
+  // Enter fullscreen when test starts
+  useEffect(() => {
+    const enterFullscreen = async () => {
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        } else if (document.documentElement.webkitRequestFullscreen) {
+          await document.documentElement.webkitRequestFullscreen();
+        } else if (document.documentElement.msRequestFullscreen) {
+          await document.documentElement.msRequestFullscreen();
+        }
+      } catch (err) {
+        console.log('Fullscreen request failed:', err);
+      }
+    };
+
+    const exitFullscreen = () => {
+      try {
+        if (document.fullscreenElement) {
+          document.exitFullscreen?.();
+        }
+      } catch (err) {
+        console.log('Exit fullscreen failed:', err);
+      }
+    };
+
+    if (stage === 'test') {
+      enterFullscreen();
+    } else if (stage === 'result') {
+      exitFullscreen();
+    }
+  }, [stage]);
 
   // Timer effect
   useEffect(() => {

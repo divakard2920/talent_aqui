@@ -101,7 +101,40 @@ async def list_interviews(
     query = query.order_by(Interview.created_at.desc()).offset(skip).limit(limit)
 
     result = await db.execute(query)
-    return result.scalars().all()
+    interviews = result.scalars().all()
+
+    # Clean up any stuck "in_progress" interviews that lost their session
+    for interview in interviews:
+        if interview.status == InterviewStatus.IN_PROGRESS.value:
+            if interview.id not in active_sessions:
+                # Session was lost (server restart or candidate abandoned)
+                # Mark as completed with incomplete evaluation
+                interview.status = InterviewStatus.COMPLETED.value
+                interview.completed_at = datetime.utcnow()
+                if interview.started_at:
+                    interview.duration_minutes = int(
+                        (datetime.utcnow() - interview.started_at).total_seconds() / 60
+                    )
+                if not interview.evaluation:
+                    interview.evaluation = {
+                        "overall_score": 0,
+                        "communication_score": 0,
+                        "technical_score": 0,
+                        "culture_fit_score": 0,
+                        "enthusiasm_score": 0,
+                        "recommendation": "reject",
+                        "summary": "Interview was abandoned or connection was lost.",
+                        "strengths": [],
+                        "concerns": ["Interview incomplete - candidate may have disconnected"],
+                        "key_highlights": [],
+                        "suggested_l2_questions": [],
+                        "incomplete": True,
+                        "reason": "abandoned_session"
+                    }
+                await db.commit()
+                await db.refresh(interview)
+
+    return interviews
 
 
 @router.get("/{interview_id}", response_model=InterviewResponse)

@@ -21,6 +21,53 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
   const streamRef = useRef(null);
   const textInputRef = useRef(null);
 
+  // Prevent browser refresh/close during active interview
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (status === 'active' || status === 'processing' || status === 'starting') {
+        e.preventDefault();
+        e.returnValue = 'Interview in progress. Are you sure you want to leave? Your progress will be lost.';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [status]);
+
+  // Enter fullscreen when interview becomes active
+  useEffect(() => {
+    const enterFullscreen = async () => {
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        } else if (document.documentElement.webkitRequestFullscreen) {
+          await document.documentElement.webkitRequestFullscreen();
+        } else if (document.documentElement.msRequestFullscreen) {
+          await document.documentElement.msRequestFullscreen();
+        }
+      } catch (err) {
+        console.log('Fullscreen request failed:', err);
+      }
+    };
+
+    const exitFullscreen = () => {
+      try {
+        if (document.fullscreenElement) {
+          document.exitFullscreen?.();
+        }
+      } catch (err) {
+        console.log('Exit fullscreen failed:', err);
+      }
+    };
+
+    if (status === 'active') {
+      enterFullscreen();
+    } else if (status === 'completed') {
+      exitFullscreen();
+    }
+  }, [status]);
+
   // Start the interview
   const startInterview = async () => {
     setStatus('starting');
