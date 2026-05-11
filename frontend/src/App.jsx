@@ -1455,16 +1455,6 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   // Get unique sources for filter
   const uniqueSources = [...new Set(candidates.map(c => c.source))];
 
-  // Stats
-  const stats = {
-    total: candidates.length,
-    walkin: candidates.filter(c => c.attended_walkin_drive).length,
-    sources: uniqueSources.reduce((acc, source) => {
-      acc[source] = candidates.filter(c => c.source === source).length;
-      return acc;
-    }, {}),
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -1475,33 +1465,10 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     >
       {/* Header */}
       <div className="flex-between">
-        <div>
-          <h2 style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>Candidates</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{candidates.length} total candidates</p>
-        </div>
+        <h2 style={{ fontSize: '2rem', margin: 0 }}>Candidates</h2>
         <button className="btn-sarvam flex-center gap-2" onClick={() => setShowUploadModal(true)}>
           <Upload size={16} /> Upload Resume
         </button>
-      </div>
-
-      {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
-        <div style={{ background: '#F9FAFB', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
-          <p style={{ margin: 0, fontSize: '1.75rem', fontWeight: 700, color: 'var(--brand-navy)' }}>{stats.total}</p>
-          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Total</p>
-        </div>
-        {uniqueSources.slice(0, 3).map(source => (
-          <div key={source} style={{ background: '#F9FAFB', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: '1.75rem', fontWeight: 700, color: 'var(--brand-navy)' }}>{stats.sources[source]}</p>
-            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{source.replace('_', ' ')}</p>
-          </div>
-        ))}
-        {stats.walkin > 0 && (
-          <div style={{ background: '#DCFCE7', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: '1.75rem', fontWeight: 700, color: '#166534' }}>{stats.walkin}</p>
-            <p style={{ margin: 0, fontSize: '0.8rem', color: '#166534' }}>Walk-in</p>
-          </div>
-        )}
       </div>
 
       {/* Search & Filters */}
