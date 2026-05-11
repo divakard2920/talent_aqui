@@ -3250,7 +3250,7 @@ function InterviewsView({ showToast }) {
                 {jobInterviews.map(interview => {
                   const candidate = candidates.find(c => c.id === interview.candidate_id);
                   const evaluation = interview.evaluation;
-                  const isIncomplete = evaluation?.incomplete || evaluation?.overall_score === 0;
+                  const isIncomplete = !evaluation || evaluation?.incomplete || evaluation?.overall_score === 0;
                   const isExpanded = expandedInterview === interview.id;
 
                   return (
