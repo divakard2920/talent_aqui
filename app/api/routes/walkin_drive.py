@@ -1239,17 +1239,21 @@ async def start_walkin_interview(
         candidate = result.scalar_one_or_none()
 
     if candidate:
-        # UPDATE existing candidate with this registration's data
-        candidate.name = registration.name
-        candidate.phone = registration.phone
-        if resume_path:
+        # Candidate exists - only update fields that are missing, don't overwrite existing data
+        if not candidate.name and registration.name:
+            candidate.name = registration.name
+        if not candidate.phone and registration.phone:
+            candidate.phone = registration.phone
+        # Only update resume if candidate doesn't have one and registration does
+        if not candidate.resume_file_path and resume_path:
             candidate.resume_file_path = resume_path
-        if resume_text:
+        if not candidate.resume_text and resume_text:
             candidate.resume_text = resume_text
-        if parsed_data:
+        if not candidate.parsed_data and parsed_data:
             candidate.parsed_data = parsed_data
-        candidate.source = "walkin_drive"
-        candidate.source_id = f"drive_{drive_id}_reg_{registration_id}"
+        # Don't change source - keep original source (e.g., "resume_upload", "github")
+        # Mark that this candidate has attended a walk-in drive
+        candidate.attended_walkin_drive = True
         await db.commit()
         await db.refresh(candidate)
     else:
@@ -1263,6 +1267,7 @@ async def start_walkin_interview(
             parsed_data=parsed_data,
             source="walkin_drive",
             source_id=f"drive_{drive_id}_reg_{registration_id}",
+            attended_walkin_drive=True,
         )
         db.add(candidate)
         await db.commit()

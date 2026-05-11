@@ -33,6 +33,7 @@ class CandidateResponse(BaseModel):
     resume_file_path: str | None
     parsed_data: dict | None
     source: str
+    attended_walkin_drive: bool | None = False
     created_at: datetime
 
     class Config:

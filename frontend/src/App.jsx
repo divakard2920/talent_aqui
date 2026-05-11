@@ -415,6 +415,7 @@ function DashboardView({ onNavigate }) {
                   </div>
                 </div>
                 <span className="chip chip-blue">{candidate.source}</span>
+                {candidate.attended_walkin_drive && <span className="chip chip-green">Walk-in</span>}
               </motion.div>
             ))}
           </div>
@@ -1417,15 +1418,52 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setInterviewCandidate(null);
   };
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [walkinFilter, setWalkinFilter] = useState('all');
+  const itemsPerPage = 15;
+
+  // Filter candidates
   const filteredCandidates = candidates.filter(c => {
     const term = searchTerm.toLowerCase();
     const skills = c.parsed_data?.skills || [];
-    return (
+    const matchesSearch = (
       c.name?.toLowerCase().includes(term) ||
       c.email?.toLowerCase().includes(term) ||
       skills.some(skill => skill.toLowerCase().includes(term))
     );
+    const matchesSource = sourceFilter === 'all' || c.source === sourceFilter;
+    const matchesWalkin = walkinFilter === 'all' ||
+      (walkinFilter === 'walkin' && c.attended_walkin_drive) ||
+      (walkinFilter === 'non-walkin' && !c.attended_walkin_drive);
+    return matchesSearch && matchesSource && matchesWalkin;
   });
+
+  // Pagination
+  const totalPages = Math.ceil(filteredCandidates.length / itemsPerPage);
+  const paginatedCandidates = filteredCandidates.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, sourceFilter, walkinFilter]);
+
+  // Get unique sources for filter
+  const uniqueSources = [...new Set(candidates.map(c => c.source))];
+
+  // Stats
+  const stats = {
+    total: candidates.length,
+    walkin: candidates.filter(c => c.attended_walkin_drive).length,
+    sources: uniqueSources.reduce((acc, source) => {
+      acc[source] = candidates.filter(c => c.source === source).length;
+      return acc;
+    }, {}),
+  };
 
   return (
     <motion.div
@@ -1433,55 +1471,299 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: '900px', margin: '0 auto' }}
+      style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '1100px', margin: '0 auto' }}
     >
+      {/* Header */}
       <div className="flex-between">
         <div>
-          <h2 style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>Candidates</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>All sourced and uploaded candidates.</p>
+          <h2 style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>Candidates</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{candidates.length} total candidates</p>
         </div>
         <button className="btn-sarvam flex-center gap-2" onClick={() => setShowUploadModal(true)}>
-          <Upload size={16} /> Upload Resumes
+          <Upload size={16} /> Upload Resume
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: '12px' }}>
-        <input
-          type="text"
-          placeholder="Search by name, email, or skill..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="input-elegant"
-          style={{ flex: 1 }}
-        />
-        <button className="btn-pill" onClick={fetchCandidates}>
-          <RefreshCw size={16} />
-        </button>
+      {/* Stats Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+        <div style={{ background: '#F9FAFB', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
+          <p style={{ margin: 0, fontSize: '1.75rem', fontWeight: 700, color: 'var(--brand-navy)' }}>{stats.total}</p>
+          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Total</p>
+        </div>
+        {uniqueSources.slice(0, 3).map(source => (
+          <div key={source} style={{ background: '#F9FAFB', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: '1.75rem', fontWeight: 700, color: 'var(--brand-navy)' }}>{stats.sources[source]}</p>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{source.replace('_', ' ')}</p>
+          </div>
+        ))}
+        {stats.walkin > 0 && (
+          <div style={{ background: '#DCFCE7', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: '1.75rem', fontWeight: 700, color: '#166534' }}>{stats.walkin}</p>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#166534' }}>Walk-in</p>
+          </div>
+        )}
       </div>
 
+      {/* Filters & Search */}
+      <div className="sovereign-card" style={{ padding: '16px' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <input
+              type="text"
+              placeholder="Search by name, email, or skill..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="input-elegant"
+              style={{ width: '100%' }}
+            />
+          </div>
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className="input-elegant"
+            style={{ minWidth: '140px' }}
+          >
+            <option value="all">All Sources</option>
+            {uniqueSources.map(source => (
+              <option key={source} value={source}>{source.replace('_', ' ')}</option>
+            ))}
+          </select>
+          <select
+            value={walkinFilter}
+            onChange={(e) => setWalkinFilter(e.target.value)}
+            className="input-elegant"
+            style={{ minWidth: '140px' }}
+          >
+            <option value="all">All Candidates</option>
+            <option value="walkin">Walk-in Only</option>
+            <option value="non-walkin">Non Walk-in</option>
+          </select>
+          <button className="btn-pill" onClick={fetchCandidates} title="Refresh">
+            <RefreshCw size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* Candidates Grid */}
       {loading ? (
         <div className="flex-center" style={{ padding: '60px' }}>
           <Loader2 size={32} className="spin" />
         </div>
       ) : filteredCandidates.length === 0 ? (
-        <div className="sovereign-card" style={{ textAlign: 'center', padding: '60px' }}>
-          <Users size={48} color="var(--text-muted)" style={{ marginBottom: '16px' }} />
-          <h3 style={{ marginBottom: '8px' }}>No Candidates Found</h3>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
-            {searchTerm ? 'Try a different search term.' : 'Upload resumes or search GitHub to add candidates.'}
+        <div style={{ textAlign: 'center', padding: '80px 40px', background: 'linear-gradient(135deg, #FAFAFA 0%, #F5F5F5 100%)', borderRadius: '24px' }}>
+          <div style={{ width: '80px', height: '80px', margin: '0 auto 20px', background: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+            <Users size={36} color="var(--text-muted)" />
+          </div>
+          <h3 style={{ marginBottom: '8px', fontSize: '1.25rem' }}>No Candidates Found</h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '24px', maxWidth: '300px', margin: '0 auto' }}>
+            {searchTerm || sourceFilter !== 'all' || walkinFilter !== 'all'
+              ? 'Try adjusting your filters.'
+              : 'Upload resumes or search GitHub to add candidates.'}
           </p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {filteredCandidates.map((candidate) => (
-            <CandidateCard
-              key={candidate.id}
-              candidate={candidate}
-              onView={() => handleViewCandidate(candidate)}
-              onDelete={() => handleDeleteCandidate(candidate)}
-            />
-          ))}
-        </div>
+        <>
+          {/* Candidates Grid */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: '16px',
+          }}>
+            {paginatedCandidates.map((candidate) => {
+              const parsed = candidate.parsed_data || {};
+              return (
+                <motion.div
+                  key={candidate.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  whileHover={{ y: -2, boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}
+                  transition={{ duration: 0.2 }}
+                  onClick={() => handleViewCandidate(candidate)}
+                  style={{
+                    background: 'white',
+                    borderRadius: '16px',
+                    padding: '20px',
+                    cursor: 'pointer',
+                    border: '1px solid #EAEAEA',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Top accent line */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '3px',
+                    background: candidate.source === 'github' ? '#24292e' : candidate.attended_walkin_drive ? 'linear-gradient(90deg, #10B981, #3B82F6)' : 'var(--brand-navy)',
+                  }} />
+
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '14px' }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '12px',
+                      background: candidate.source === 'github' ? '#24292e' : 'linear-gradient(135deg, #1E3A5F 0%, #0F1C2E 100%)',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.1rem',
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}>
+                      {candidate.source === 'github' ? <GithubIcon size={20} /> : formatName(candidate.name)?.charAt(0) || '?'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h4 style={{ margin: '0 0 2px', fontSize: '1rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {formatName(candidate.name)}
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {candidate.email}
+                      </p>
+                    </div>
+                    {/* Quick delete */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteCandidate(candidate); }}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '4px',
+                        cursor: 'pointer',
+                        opacity: 0.4,
+                        transition: 'opacity 0.15s',
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                      onMouseLeave={(e) => e.currentTarget.style.opacity = 0.4}
+                      title="Delete"
+                    >
+                      <Trash2 size={16} color="#666" />
+                    </button>
+                  </div>
+
+                  {/* Skills */}
+                  {(parsed.skills || []).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+                      {parsed.skills.slice(0, 4).map((skill, i) => (
+                        <span key={i} style={{
+                          fontSize: '0.72rem',
+                          padding: '4px 10px',
+                          background: '#F3F4F6',
+                          borderRadius: '20px',
+                          color: '#374151',
+                          fontWeight: 500,
+                        }}>{skill}</span>
+                      ))}
+                      {parsed.skills.length > 4 && (
+                        <span style={{
+                          fontSize: '0.72rem',
+                          padding: '4px 10px',
+                          background: '#E5E7EB',
+                          borderRadius: '20px',
+                          color: '#6B7280',
+                        }}>+{parsed.skills.length - 4}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Footer */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #F3F4F6' }}>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontSize: '0.7rem',
+                        padding: '3px 8px',
+                        background: candidate.source === 'github' ? '#24292e' : '#E0E7FF',
+                        color: candidate.source === 'github' ? 'white' : '#4338CA',
+                        borderRadius: '6px',
+                        fontWeight: 500,
+                        textTransform: 'capitalize',
+                      }}>
+                        {candidate.source?.replace('_', ' ')}
+                      </span>
+                      {candidate.attended_walkin_drive && (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          padding: '3px 8px',
+                          background: '#D1FAE5',
+                          color: '#065F46',
+                          borderRadius: '6px',
+                          fontWeight: 500,
+                        }}>Walk-in</span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>
+                      {new Date(candidate.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
+                    </span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          {/* Modern Pagination */}
+          {totalPages > 1 && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '16px',
+              padding: '24px 0',
+            }}>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  background: currentPage === 1 ? '#F3F4F6' : 'white',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '10px',
+                  padding: '10px 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  color: currentPage === 1 ? '#9CA3AF' : '#374151',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <ChevronRight size={16} style={{ transform: 'rotate(180deg)' }} /> Previous
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.9rem', color: '#6B7280' }}>
+                  Page <strong style={{ color: '#111' }}>{currentPage}</strong> of <strong style={{ color: '#111' }}>{totalPages}</strong>
+                </span>
+                <span style={{ fontSize: '0.8rem', color: '#9CA3AF', marginLeft: '8px' }}>
+                  ({filteredCandidates.length} candidates)
+                </span>
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                style={{
+                  background: currentPage === totalPages ? '#F3F4F6' : 'var(--brand-navy)',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '10px 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                  color: currentPage === totalPages ? '#9CA3AF' : 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s',
+                }}
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Upload Modal */}
@@ -1528,6 +1810,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
                 </div>
               </div>
               <span className="chip chip-blue">{selectedCandidate.source}</span>
+              {selectedCandidate.attended_walkin_drive && <span className="chip chip-green">Walk-in</span>}
             </div>
 
             {/* Summary */}
@@ -1961,6 +2244,7 @@ function CandidateCard({ candidate, onView, onDelete }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
             <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{formatName(candidate.name)}</h4>
             <span className="chip chip-blue" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>{candidate.source}</span>
+            {candidate.attended_walkin_drive && <span className="chip chip-green" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>Walk-in</span>}
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>

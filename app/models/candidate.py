@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Float, ForeignKey, Boolean
 from sqlalchemy.sql import func
 
 from app.models.database import Base
@@ -17,6 +17,7 @@ class Candidate(Base):
     parsed_data = Column(JSON)  # Structured resume data from AI
     source = Column(String(50))  # upload, greenhouse, lever, etc.
     source_id = Column(String(100))  # External ATS ID
+    attended_walkin_drive = Column(Boolean, default=False)  # True if candidate attended a walk-in drive
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

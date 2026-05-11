@@ -38,3 +38,7 @@ async def init_db():
             await conn.execute(text("ALTER TABLE walkin_drives ADD COLUMN question_type VARCHAR(20) DEFAULT 'mixed'"))
         except Exception:
             pass  # Column already exists
+        try:
+            await conn.execute(text("ALTER TABLE candidates ADD COLUMN attended_walkin_drive BOOLEAN DEFAULT 0"))
+        except Exception:
+            pass  # Column already exists
