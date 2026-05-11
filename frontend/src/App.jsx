@@ -6635,35 +6635,34 @@ function CandidateTestPortal({ driveId }) {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [stage]);
 
-  // Enter fullscreen when test starts
+  // Fullscreen helpers
+  const enterFullscreen = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if (document.documentElement.webkitRequestFullscreen) {
+        await document.documentElement.webkitRequestFullscreen();
+      } else if (document.documentElement.msRequestFullscreen) {
+        await document.documentElement.msRequestFullscreen();
+      }
+    } catch (err) {
+      console.log('Fullscreen not available:', err.message);
+    }
+  };
+
+  const exitFullscreen = () => {
+    try {
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.();
+      }
+    } catch (err) {
+      console.log('Exit fullscreen failed:', err);
+    }
+  };
+
+  // Exit fullscreen when showing results
   useEffect(() => {
-    const enterFullscreen = async () => {
-      try {
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-        } else if (document.documentElement.webkitRequestFullscreen) {
-          await document.documentElement.webkitRequestFullscreen();
-        } else if (document.documentElement.msRequestFullscreen) {
-          await document.documentElement.msRequestFullscreen();
-        }
-      } catch (err) {
-        console.log('Fullscreen request failed:', err);
-      }
-    };
-
-    const exitFullscreen = () => {
-      try {
-        if (document.fullscreenElement) {
-          document.exitFullscreen?.();
-        }
-      } catch (err) {
-        console.log('Exit fullscreen failed:', err);
-      }
-    };
-
-    if (stage === 'test') {
-      enterFullscreen();
-    } else if (stage === 'result') {
+    if (stage === 'result') {
       exitFullscreen();
     }
   }, [stage]);
@@ -6734,6 +6733,9 @@ function CandidateTestPortal({ driveId }) {
   };
 
   const handleStartTest = async () => {
+    // Enter fullscreen on user click
+    await enterFullscreen();
+
     setLoading(true);
     setError('');
 
@@ -6744,12 +6746,16 @@ function CandidateTestPortal({ driveId }) {
       setStage('test');
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not start test');
+      exitFullscreen();
     } finally {
       setLoading(false);
     }
   };
 
   const handleResumeTest = async () => {
+    // Enter fullscreen on user click
+    await enterFullscreen();
+
     setLoading(true);
     setError('');
 
@@ -6761,6 +6767,7 @@ function CandidateTestPortal({ driveId }) {
       setStage('test');
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not resume test');
+      exitFullscreen();
     } finally {
       setLoading(false);
     }

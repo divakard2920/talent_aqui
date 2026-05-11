@@ -35,41 +35,43 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [status]);
 
-  // Enter fullscreen when interview becomes active
+  // Fullscreen helpers
+  const enterFullscreen = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if (document.documentElement.webkitRequestFullscreen) {
+        await document.documentElement.webkitRequestFullscreen();
+      } else if (document.documentElement.msRequestFullscreen) {
+        await document.documentElement.msRequestFullscreen();
+      }
+    } catch (err) {
+      console.log('Fullscreen not available:', err.message);
+    }
+  };
+
+  const exitFullscreen = () => {
+    try {
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.();
+      }
+    } catch (err) {
+      console.log('Exit fullscreen failed:', err);
+    }
+  };
+
+  // Exit fullscreen when interview completes
   useEffect(() => {
-    const enterFullscreen = async () => {
-      try {
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-        } else if (document.documentElement.webkitRequestFullscreen) {
-          await document.documentElement.webkitRequestFullscreen();
-        } else if (document.documentElement.msRequestFullscreen) {
-          await document.documentElement.msRequestFullscreen();
-        }
-      } catch (err) {
-        console.log('Fullscreen request failed:', err);
-      }
-    };
-
-    const exitFullscreen = () => {
-      try {
-        if (document.fullscreenElement) {
-          document.exitFullscreen?.();
-        }
-      } catch (err) {
-        console.log('Exit fullscreen failed:', err);
-      }
-    };
-
-    if (status === 'active') {
-      enterFullscreen();
-    } else if (status === 'completed') {
+    if (status === 'completed') {
       exitFullscreen();
     }
   }, [status]);
 
   // Start the interview
   const startInterview = async () => {
+    // Enter fullscreen immediately on user click
+    await enterFullscreen();
+
     setStatus('starting');
     setError(null);
 
@@ -92,6 +94,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to start interview');
       setStatus('ready');
+      exitFullscreen(); // Exit fullscreen if start failed
     }
   };
 
