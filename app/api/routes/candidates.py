@@ -107,3 +107,31 @@ async def get_shortlisted_candidates(
         )
     )
     return result.scalars().all()
+
+
+@router.get("/{candidate_id}/groups")
+async def get_candidate_groups(candidate_id: int, db: AsyncSession = Depends(get_db)):
+    """Get all groups a candidate belongs to."""
+    from app.models.candidate_group import CandidateGroup, candidate_group_association
+
+    # Verify candidate exists
+    result = await db.execute(select(Candidate).where(Candidate.id == candidate_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Get group IDs for this candidate
+    result = await db.execute(
+        select(candidate_group_association.c.group_id).where(
+            candidate_group_association.c.candidate_id == candidate_id
+        )
+    )
+    group_ids = [row[0] for row in result.fetchall()]
+
+    if not group_ids:
+        return []
+
+    # Get groups
+    result = await db.execute(
+        select(CandidateGroup).where(CandidateGroup.id.in_(group_ids))
+    )
+    return result.scalars().all()

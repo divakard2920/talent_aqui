@@ -160,9 +160,18 @@ async def match_candidate_to_job(
 async def screen_candidates_for_job(
     job_id: int,
     top_n: int = 10,
+    group_ids: str | None = None,  # Comma-separated group IDs
     db: AsyncSession = Depends(get_db),
 ):
-    """Screen all candidates for a specific job and return ranked results."""
+    """Screen candidates for a specific job and return ranked results.
+
+    Args:
+        job_id: The job to screen for
+        top_n: Maximum number of results to return
+        group_ids: Optional comma-separated list of group IDs to filter candidates
+    """
+    from app.models.candidate_group import candidate_group_association
+
     # Get job
     result = await db.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
@@ -172,9 +181,32 @@ async def screen_candidates_for_job(
     if job.status != "open":
         raise HTTPException(status_code=400, detail=f"Cannot screen for job with status '{job.status}'. Job must be open.")
 
-    # Get all candidates
-    result = await db.execute(select(Candidate))
-    candidates = result.scalars().all()
+    # Get candidates - filter by groups if specified
+    if group_ids:
+        # Parse group IDs
+        gids = [int(gid.strip()) for gid in group_ids.split(',') if gid.strip()]
+        if gids:
+            # Get candidate IDs in any of the specified groups
+            result = await db.execute(
+                select(candidate_group_association.c.candidate_id).where(
+                    candidate_group_association.c.group_id.in_(gids)
+                ).distinct()
+            )
+            candidate_ids = [row[0] for row in result.fetchall()]
+
+            if not candidate_ids:
+                return []
+
+            result = await db.execute(
+                select(Candidate).where(Candidate.id.in_(candidate_ids))
+            )
+            candidates = result.scalars().all()
+        else:
+            result = await db.execute(select(Candidate))
+            candidates = result.scalars().all()
+    else:
+        result = await db.execute(select(Candidate))
+        candidates = result.scalars().all()
 
     if not candidates:
         return []

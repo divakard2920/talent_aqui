@@ -15,21 +15,25 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 async def create_job(
     job: JobCreate,
     background_tasks: BackgroundTasks,
+    group_ids: str | None = None,  # Comma-separated group IDs for screening
     db: AsyncSession = Depends(get_db),
 ):
     """
     Create a new job posting.
 
-    After creation, automatically screens all existing candidates
-    against this job in the background.
+    After creation, automatically screens candidates against this job in the background.
+
+    Args:
+        job: Job details
+        group_ids: Optional comma-separated list of group IDs to filter which candidates to screen
     """
     db_job = Job(**job.model_dump())
     db.add(db_job)
     await db.commit()
     await db.refresh(db_job)
 
-    # Trigger automatic screening in background
-    background_tasks.add_task(screen_candidates_for_job, db_job.id)
+    # Trigger automatic screening in background (optionally filtered by groups)
+    background_tasks.add_task(screen_candidates_for_job, db_job.id, group_ids)
 
     return db_job
 
@@ -164,11 +168,16 @@ async def get_job_matches(
 @router.post("/{job_id}/rescreen")
 async def rescreen_job(
     job_id: int,
-    background_tasks: BackgroundTasks,
+    group_ids: str | None = None,  # Comma-separated group IDs
+    background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Manually trigger re-screening of all candidates for a job.
+    Manually trigger re-screening of candidates for a job.
+
+    Args:
+        job_id: The job to screen for
+        group_ids: Optional comma-separated list of group IDs to filter candidates
 
     Useful after adding new candidates or updating job requirements.
     """
@@ -180,6 +189,6 @@ async def rescreen_job(
     if job.status != "open":
         raise HTTPException(status_code=400, detail=f"Cannot screen for job with status '{job.status}'. Job must be open.")
 
-    background_tasks.add_task(screen_candidates_for_job, job_id)
+    background_tasks.add_task(screen_candidates_for_job, job_id, group_ids)
 
     return {"message": f"Re-screening started for job: {job.title}"}

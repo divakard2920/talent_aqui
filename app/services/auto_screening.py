@@ -9,15 +9,21 @@ from app.services.candidate_matcher import candidate_matcher
 from app.schemas.candidate import ParsedResumeData
 
 
-async def screen_candidates_for_job(job_id: int):
+async def screen_candidates_for_job(job_id: int, group_ids: str | None = None):
     """
-    Background task to automatically screen all candidates for a new job.
+    Background task to automatically screen candidates for a job.
 
     This runs after a job is created and:
-    1. Fetches all candidates from the database
+    1. Fetches candidates from the database (optionally filtered by groups)
     2. Runs AI matching for each candidate against the job
     3. Stores match scores and recommendations
+
+    Args:
+        job_id: The job to screen for
+        group_ids: Optional comma-separated list of group IDs to filter candidates
     """
+    from app.models.candidate_group import candidate_group_association
+
     async with async_session() as db:
         try:
             # Get the job
@@ -35,11 +41,41 @@ async def screen_candidates_for_job(job_id: int):
 
             print(f"[Auto-Screen] Starting screening for job: {job.title} (ID: {job_id})")
 
-            # Get all candidates with parsed data
-            result = await db.execute(
-                select(Candidate).where(Candidate.parsed_data.isnot(None))
-            )
-            candidates = result.scalars().all()
+            # Get candidates - filter by groups if specified
+            if group_ids:
+                gids = [int(gid.strip()) for gid in group_ids.split(',') if gid.strip()]
+                if gids:
+                    print(f"[Auto-Screen] Filtering by groups: {gids}")
+                    # Get candidate IDs in any of the specified groups
+                    result = await db.execute(
+                        select(candidate_group_association.c.candidate_id).where(
+                            candidate_group_association.c.group_id.in_(gids)
+                        ).distinct()
+                    )
+                    candidate_ids = [row[0] for row in result.fetchall()]
+
+                    if not candidate_ids:
+                        print(f"[Auto-Screen] No candidates in specified groups for job {job_id}")
+                        return
+
+                    result = await db.execute(
+                        select(Candidate).where(
+                            Candidate.id.in_(candidate_ids),
+                            Candidate.parsed_data.isnot(None)
+                        )
+                    )
+                    candidates = result.scalars().all()
+                else:
+                    result = await db.execute(
+                        select(Candidate).where(Candidate.parsed_data.isnot(None))
+                    )
+                    candidates = result.scalars().all()
+            else:
+                # Get all candidates with parsed data
+                result = await db.execute(
+                    select(Candidate).where(Candidate.parsed_data.isnot(None))
+                )
+                candidates = result.scalars().all()
 
             if not candidates:
                 print(f"[Auto-Screen] No candidates to screen for job {job_id}")

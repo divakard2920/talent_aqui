@@ -24,6 +24,7 @@ async def init_db():
     from app.models.candidate import Candidate, CandidateJobMatch
     from app.models.interview import Interview
     from app.models.walkin_drive import WalkInDrive, DriveRegistration
+    from app.models.candidate_group import CandidateGroup, candidate_group_association
     from sqlalchemy import text
 
     async with engine.begin() as conn:

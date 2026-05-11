@@ -11,11 +11,11 @@ const api = axios.create({
 export const jobsApi = {
   list: (params = {}) => api.get('/jobs/', { params }),
   get: (id) => api.get(`/jobs/${id}`),
-  create: (data) => api.post('/jobs/', data),
+  create: (data, groupIds = null) => api.post(`/jobs/${groupIds ? `?group_ids=${groupIds.join(',')}` : ''}`, data),
   update: (id, data) => api.patch(`/jobs/${id}`, data),
   delete: (id) => api.delete(`/jobs/${id}`),
   getMatches: (id, params = {}) => api.get(`/jobs/${id}/matches`, { params }),
-  rescreen: (id) => api.post(`/jobs/${id}/rescreen`),
+  rescreen: (id, groupIds = null) => api.post(`/jobs/${id}/rescreen${groupIds ? `?group_ids=${groupIds.join(',')}` : ''}`),
 };
 
 // Candidates API
@@ -25,6 +25,19 @@ export const candidatesApi = {
   delete: (id) => api.delete(`/candidates/${id}`),
   getMatches: (id) => api.get(`/candidates/${id}/matches`),
   getShortlisted: (jobId) => api.get(`/candidates/shortlisted/${jobId}`),
+  getGroups: (id) => api.get(`/candidates/${id}/groups`),
+};
+
+// Candidate Groups API
+export const groupsApi = {
+  list: () => api.get('/candidate-groups/'),
+  create: (data) => api.post('/candidate-groups/', data),
+  update: (id, data) => api.put(`/candidate-groups/${id}`, data),
+  delete: (id) => api.delete(`/candidate-groups/${id}`),
+  getCandidates: (id) => api.get(`/candidate-groups/${id}/candidates`),
+  addCandidate: (groupId, candidateId) => api.post(`/candidate-groups/${groupId}/candidates/${candidateId}`),
+  removeCandidate: (groupId, candidateId) => api.delete(`/candidate-groups/${groupId}/candidates/${candidateId}`),
+  addCandidatesBulk: (groupId, candidateIds) => api.post(`/candidate-groups/${groupId}/candidates/bulk`, candidateIds),
 };
 
 // Resume API
@@ -38,8 +51,8 @@ export const resumeApi = {
   },
   matchToJob: (candidateId, jobId) =>
     api.post(`/resumes/match/${candidateId}/${jobId}`),
-  screenForJob: (jobId, topN = 10) =>
-    api.post(`/resumes/screen/${jobId}?top_n=${topN}`),
+  screenForJob: (jobId, topN = 10, groupIds = null) =>
+    api.post(`/resumes/screen/${jobId}?top_n=${topN}${groupIds ? `&group_ids=${groupIds.join(',')}` : ''}`),
   updateShortlistStatus: (matchId, status) =>
     api.patch(`/resumes/shortlist/${matchId}?status=${status}`),
 };

@@ -37,6 +37,9 @@ import {
   UserX,
   Clock,
   Download,
+  FolderOpen,
+  Tag,
+  MoreVertical,
 } from 'lucide-react';
 import './index.css';
 import knorrLogo from './assets/knorr.png';
@@ -44,7 +47,7 @@ import falconLogo from './assets/falcon-logo.png';
 import falconHead from './assets/falcon-head.png';
 import falconFLogo from './assets/falcon_flogo.png';
 import { jsPDF } from 'jspdf';
-import { jobsApi, candidatesApi, resumeApi, githubApi, interviewApi, walkinApi } from './services/api';
+import { jobsApi, candidatesApi, resumeApi, githubApi, interviewApi, walkinApi, groupsApi } from './services/api';
 import { Modal, JobForm, GitHubSearchForm, GitHubCandidateCard, ResumeUpload, CandidateResult, ConfirmDialog, InterviewRoom } from './components';
 
 // Simple SVG icons for GitHub and LinkedIn
@@ -441,6 +444,16 @@ function JobsView({ showToast, onViewCandidate }) {
   const [screeningJobId, setScreeningJobId] = useState(null); // Track job being screened
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: 'warning', title: '', message: '', onConfirm: null });
 
+  // Group selection for screening
+  const [groups, setGroups] = useState([]);
+  const [showRescreenModal, setShowRescreenModal] = useState(false);
+  const [rescreenJob, setRescreenJob] = useState(null);
+  const [selectedGroupsForScreen, setSelectedGroupsForScreen] = useState([]);
+
+  // Job creation with group selection
+  const [pendingJobData, setPendingJobData] = useState(null);
+  const [showScreenGroupModal, setShowScreenGroupModal] = useState(false);
+
   // URL state helper
   const updateUrl = (jobId) => {
     const params = new URLSearchParams(window.location.search);
@@ -467,10 +480,21 @@ function JobsView({ showToast, onViewCandidate }) {
     }
   }, []);
 
+  // Fetch groups for filtering
+  const fetchGroups = useCallback(async () => {
+    try {
+      const res = await groupsApi.list();
+      setGroups(res.data);
+    } catch (err) {
+      console.error('Failed to fetch groups:', err);
+    }
+  }, []);
+
   // Initialize from URL
   useEffect(() => {
     const init = async () => {
       const jobsList = await fetchJobs();
+      await fetchGroups();
       const params = new URLSearchParams(window.location.search);
       const jobId = params.get('job');
       if (jobId && jobsList.length > 0) {
@@ -502,17 +526,36 @@ function JobsView({ showToast, onViewCandidate }) {
   }, [selectedJob?.id, showDetailModal]);
 
   const handleCreateJob = async (data) => {
+    // If groups exist, show group selection modal first
+    if (groups.length > 0) {
+      setPendingJobData(data);
+      setSelectedGroupsForScreen([]);
+      setShowCreateModal(false);
+      setShowScreenGroupModal(true);
+      return;
+    }
+
+    // No groups, create job and screen all candidates
+    await executeCreateJob(data, null);
+  };
+
+  const executeCreateJob = async (data, groupIds) => {
     setCreating(true);
     try {
-      const res = await jobsApi.create(data);
+      const res = await jobsApi.create(data, groupIds);
       setJobs(prev => [res.data, ...prev]);
-      setShowCreateModal(false);
+      setShowScreenGroupModal(false);
+      setPendingJobData(null);
       setScreeningJobId(res.data.id);
-      showToast('Job created! AI is screening candidates in the background...', 'info');
+      const groupInfo = groupIds && groupIds.length > 0
+        ? ` Screening ${groupIds.length} group(s)...`
+        : ' Screening all candidates...';
+      showToast(`Job created!${groupInfo}`, 'info');
     } catch (err) {
       showToast('Failed to create job: ' + (err.response?.data?.detail || err.message), 'error');
     } finally {
       setCreating(false);
+      setSelectedGroupsForScreen([]);
     }
   };
 
@@ -568,24 +611,49 @@ function JobsView({ showToast, onViewCandidate }) {
   };
 
   const handleRescreen = (job) => {
-    setConfirmDialog({
-      isOpen: true,
-      type: 'info',
-      title: 'Re-screen Candidates',
-      message: `Do you want to re-screen candidates for "${job.title}"? This will re-evaluate only pending candidates. Shortlisted and rejected candidates will be skipped.`,
-      onConfirm: async () => {
-        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-        try {
-          await jobsApi.rescreen(job.id);
-          setScreeningJobId(job.id);
-          // Clear current matches to show screening progress state in modal
-          setJobMatches({ matches: [], total_matches: 0 });
-          showToast(`Re-screening started for "${job.title}"!`, 'info');
-        } catch {
-          showToast('Failed to start re-screening', 'error');
-        }
-      },
-    });
+    // If there are groups, show selection modal
+    if (groups.length > 0) {
+      setRescreenJob(job);
+      setSelectedGroupsForScreen([]);
+      setShowRescreenModal(true);
+    } else {
+      // No groups, proceed with all candidates
+      setConfirmDialog({
+        isOpen: true,
+        type: 'info',
+        title: 'Re-screen Candidates',
+        message: `Do you want to re-screen candidates for "${job.title}"? This will re-evaluate only pending candidates. Shortlisted and rejected candidates will be skipped.`,
+        onConfirm: async () => {
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+          try {
+            await jobsApi.rescreen(job.id);
+            setScreeningJobId(job.id);
+            setJobMatches({ matches: [], total_matches: 0 });
+            showToast(`Re-screening started for "${job.title}"!`, 'info');
+          } catch {
+            showToast('Failed to start re-screening', 'error');
+          }
+        },
+      });
+    }
+  };
+
+  const executeRescreen = async () => {
+    if (!rescreenJob) return;
+    setShowRescreenModal(false);
+    try {
+      await jobsApi.rescreen(rescreenJob.id, selectedGroupsForScreen.length > 0 ? selectedGroupsForScreen : null);
+      setScreeningJobId(rescreenJob.id);
+      setJobMatches({ matches: [], total_matches: 0 });
+      const groupInfo = selectedGroupsForScreen.length > 0
+        ? ` for ${selectedGroupsForScreen.length} group(s)`
+        : ' for all candidates';
+      showToast(`Re-screening started for "${rescreenJob.title}"${groupInfo}!`, 'info');
+    } catch {
+      showToast('Failed to start re-screening', 'error');
+    }
+    setRescreenJob(null);
+    setSelectedGroupsForScreen([]);
   };
 
   const handleShortlist = async (matchId, status) => {
@@ -1204,6 +1272,242 @@ function JobsView({ showToast, onViewCandidate }) {
         )}
       </Modal>
 
+      {/* Rescreen Modal - Select Groups */}
+      <Modal
+        isOpen={showRescreenModal}
+        onClose={() => { setShowRescreenModal(false); setRescreenJob(null); setSelectedGroupsForScreen([]); }}
+        title={`Screen Candidates for "${rescreenJob?.title || ''}"`}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
+            Select which candidate groups to screen, or screen all candidates.
+          </p>
+
+          {/* All Candidates Option */}
+          <div
+            onClick={() => setSelectedGroupsForScreen([])}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '14px 16px',
+              background: selectedGroupsForScreen.length === 0 ? '#EEF2FF' : '#FAFAFA',
+              borderRadius: '12px',
+              border: selectedGroupsForScreen.length === 0 ? '2px solid var(--brand-navy)' : '1px solid #EAEAEA',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            <div style={{
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              border: selectedGroupsForScreen.length === 0 ? '6px solid var(--brand-navy)' : '2px solid #D1D5DB',
+              background: 'white',
+            }} />
+            <div>
+              <p style={{ margin: 0, fontWeight: 500 }}>All Candidates</p>
+              <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Screen every candidate in the system
+              </p>
+            </div>
+          </div>
+
+          {/* Group Options */}
+          {groups.length > 0 && (
+            <>
+              <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '4px' }}>Or select specific groups:</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {groups.map(group => {
+                  const isSelected = selectedGroupsForScreen.includes(group.id);
+                  return (
+                    <div
+                      key={group.id}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedGroupsForScreen(prev => prev.filter(id => id !== group.id));
+                        } else {
+                          setSelectedGroupsForScreen(prev => [...prev, group.id]);
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '14px 16px',
+                        background: isSelected ? `${group.color}10` : '#FAFAFA',
+                        borderRadius: '12px',
+                        border: isSelected ? `2px solid ${group.color}` : '1px solid #EAEAEA',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '4px',
+                        border: isSelected ? 'none' : '2px solid #D1D5DB',
+                        background: isSelected ? group.color : 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        {isSelected && <Check size={14} color="white" />}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: group.color }} />
+                          <span style={{ fontWeight: 500 }}>{group.name}</span>
+                        </div>
+                        {group.candidate_count !== undefined && (
+                          <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            {group.candidate_count} candidate{group.candidate_count !== 1 ? 's' : ''}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* Actions */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+            <button
+              className="btn-pill"
+              onClick={() => { setShowRescreenModal(false); setRescreenJob(null); setSelectedGroupsForScreen([]); }}
+            >
+              Cancel
+            </button>
+            <button className="btn-sarvam" onClick={executeRescreen}>
+              <RefreshCw size={16} />
+              {selectedGroupsForScreen.length > 0
+                ? `Screen ${selectedGroupsForScreen.length} Group${selectedGroupsForScreen.length !== 1 ? 's' : ''}`
+                : 'Screen All Candidates'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Job Creation - Select Groups to Screen */}
+      <Modal
+        isOpen={showScreenGroupModal}
+        onClose={() => { setShowScreenGroupModal(false); setPendingJobData(null); setSelectedGroupsForScreen([]); }}
+        title="Select Candidates to Screen"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
+            Choose which candidates to screen for this new job. You can screen all candidates or select specific groups.
+          </p>
+
+          {/* All Candidates Option */}
+          <div
+            onClick={() => setSelectedGroupsForScreen([])}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '14px 16px',
+              background: selectedGroupsForScreen.length === 0 ? '#EEF2FF' : '#FAFAFA',
+              borderRadius: '12px',
+              border: selectedGroupsForScreen.length === 0 ? '2px solid var(--brand-navy)' : '1px solid #EAEAEA',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            <div style={{
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              border: selectedGroupsForScreen.length === 0 ? '6px solid var(--brand-navy)' : '2px solid #D1D5DB',
+              background: 'white',
+            }} />
+            <div>
+              <p style={{ margin: 0, fontWeight: 500 }}>All Candidates</p>
+              <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Screen every candidate in the system
+              </p>
+            </div>
+          </div>
+
+          {/* Group Options */}
+          <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '4px' }}>Or select specific groups:</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {groups.map(group => {
+              const isSelected = selectedGroupsForScreen.includes(group.id);
+              return (
+                <div
+                  key={group.id}
+                  onClick={() => {
+                    if (isSelected) {
+                      setSelectedGroupsForScreen(prev => prev.filter(id => id !== group.id));
+                    } else {
+                      setSelectedGroupsForScreen(prev => [...prev, group.id]);
+                    }
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '14px 16px',
+                    background: isSelected ? `${group.color}10` : '#FAFAFA',
+                    borderRadius: '12px',
+                    border: isSelected ? `2px solid ${group.color}` : '1px solid #EAEAEA',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '4px',
+                    border: isSelected ? 'none' : '2px solid #D1D5DB',
+                    background: isSelected ? group.color : 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    {isSelected && <Check size={14} color="white" />}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: group.color }} />
+                      <span style={{ fontWeight: 500 }}>{group.name}</span>
+                    </div>
+                    {group.candidate_count !== undefined && (
+                      <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        {group.candidate_count} candidate{group.candidate_count !== 1 ? 's' : ''}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+            <button
+              className="btn-pill"
+              onClick={() => { setShowScreenGroupModal(false); setPendingJobData(null); setSelectedGroupsForScreen([]); }}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn-sarvam"
+              disabled={creating}
+              onClick={() => executeCreateJob(pendingJobData, selectedGroupsForScreen.length > 0 ? selectedGroupsForScreen : null)}
+            >
+              {creating ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
+              {selectedGroupsForScreen.length > 0
+                ? `Create & Screen ${selectedGroupsForScreen.length} Group${selectedGroupsForScreen.length !== 1 ? 's' : ''}`
+                : 'Create & Screen All'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Confirm Dialog */}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
@@ -1238,6 +1542,16 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   const [creatingInterview, setCreatingInterview] = useState(false);
   const [generatedInterviewLink, setGeneratedInterviewLink] = useState(null);
 
+  // Groups state
+  const [groups, setGroups] = useState([]);
+  const [showGroupsPanel, setShowGroupsPanel] = useState(false);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupColor, setNewGroupColor] = useState('#4F46E5');
+  const [candidateGroups, setCandidateGroups] = useState({});  // Map of candidateId -> [groupIds]
+  const [groupFilter, setGroupFilter] = useState('all');
+  const [showAddToGroupMenu, setShowAddToGroupMenu] = useState(null);  // candidateId when menu is open
+
   // URL state helper
   const updateUrl = (candidateId) => {
     const params = new URLSearchParams(window.location.search);
@@ -1268,10 +1582,29 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     }
   }, []);
 
+  const fetchGroups = useCallback(async () => {
+    try {
+      const res = await groupsApi.list();
+      setGroups(res.data);
+    } catch (err) {
+      console.error('Failed to fetch groups:', err);
+    }
+  }, []);
+
+  const fetchCandidateGroups = useCallback(async (candidateId) => {
+    try {
+      const res = await candidatesApi.getGroups(candidateId);
+      setCandidateGroups(prev => ({ ...prev, [candidateId]: res.data.map(g => g.id) }));
+    } catch (err) {
+      console.error('Failed to fetch candidate groups:', err);
+    }
+  }, []);
+
   // Initialize from URL
   useEffect(() => {
     const init = async () => {
       const candidatesList = await fetchCandidates();
+      await fetchGroups();
       const params = new URLSearchParams(window.location.search);
       const candidateId = params.get('candidate');
       if (candidateId && candidatesList.length > 0) {
@@ -1328,6 +1661,10 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     setShowDetailModal(true);
     setShowAllSkills(false);
     setLoadingMatches(true);
+    // Fetch groups for this candidate if not already loaded
+    if (!candidateGroups[candidate.id] && groups.length > 0) {
+      fetchCandidateGroups(candidate.id);
+    }
     try {
       const res = await candidatesApi.getMatches(candidate.id);
       setCandidateMatches(res.data);
@@ -1437,7 +1774,9 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
     const matchesWalkin = walkinFilter === 'all' ||
       (walkinFilter === 'walkin' && c.attended_walkin_drive) ||
       (walkinFilter === 'non-walkin' && !c.attended_walkin_drive);
-    return matchesSearch && matchesSource && matchesWalkin;
+    const matchesGroup = groupFilter === 'all' ||
+      (candidateGroups[c.id] && candidateGroups[c.id].includes(parseInt(groupFilter)));
+    return matchesSearch && matchesSource && matchesWalkin && matchesGroup;
   });
 
   // Pagination
@@ -1450,7 +1789,98 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, sourceFilter, walkinFilter]);
+  }, [searchTerm, sourceFilter, walkinFilter, groupFilter]);
+
+  // Load candidate groups when groupFilter changes (for filtering)
+  useEffect(() => {
+    if (groupFilter !== 'all' && candidates.length > 0) {
+      // Load groups for all candidates to support filtering
+      candidates.forEach(c => {
+        if (!candidateGroups[c.id]) {
+          fetchCandidateGroups(c.id);
+        }
+      });
+    }
+  }, [groupFilter, candidates.length]);
+
+  // Preload groups for displayed candidates
+  useEffect(() => {
+    if (groups.length > 0 && filteredCandidates.length > 0) {
+      const displayed = filteredCandidates.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+      );
+      displayed.forEach(c => {
+        if (!candidateGroups[c.id]) {
+          fetchCandidateGroups(c.id);
+        }
+      });
+    }
+  }, [currentPage, groups.length, filteredCandidates.length]);
+
+  // Close add-to-group menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setShowAddToGroupMenu(null);
+    if (showAddToGroupMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showAddToGroupMenu]);
+
+  // Group management functions
+  const handleCreateGroup = async () => {
+    if (!newGroupName.trim()) return;
+    try {
+      const res = await groupsApi.create({ name: newGroupName, color: newGroupColor });
+      setGroups(prev => [...prev, res.data]);
+      setNewGroupName('');
+      setNewGroupColor('#4F46E5');
+      setShowCreateGroupModal(false);
+      showToast('Group created');
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to create group', 'error');
+    }
+  };
+
+  const handleDeleteGroup = async (groupId) => {
+    try {
+      await groupsApi.delete(groupId);
+      setGroups(prev => prev.filter(g => g.id !== groupId));
+      if (groupFilter === String(groupId)) {
+        setGroupFilter('all');
+      }
+      showToast('Group deleted');
+    } catch (err) {
+      showToast('Failed to delete group', 'error');
+    }
+  };
+
+  const handleAddToGroup = async (candidateId, groupId) => {
+    try {
+      await groupsApi.addCandidate(groupId, candidateId);
+      setCandidateGroups(prev => ({
+        ...prev,
+        [candidateId]: [...(prev[candidateId] || []), groupId]
+      }));
+      setShowAddToGroupMenu(null);
+      showToast('Candidate added to group');
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to add to group', 'error');
+    }
+  };
+
+  const handleRemoveFromGroup = async (candidateId, groupId) => {
+    try {
+      await groupsApi.removeCandidate(groupId, candidateId);
+      setCandidateGroups(prev => ({
+        ...prev,
+        [candidateId]: (prev[candidateId] || []).filter(id => id !== groupId)
+      }));
+      showToast('Candidate removed from group');
+    } catch (err) {
+      showToast('Failed to remove from group', 'error');
+    }
+  };
 
   // Get unique sources for filter
   const uniqueSources = [...new Set(candidates.map(c => c.source))];
@@ -1466,9 +1896,18 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
       {/* Header */}
       <div className="flex-between">
         <h2 style={{ fontSize: '2rem', margin: 0 }}>Candidates</h2>
-        <button className="btn-sarvam flex-center gap-2" onClick={() => setShowUploadModal(true)}>
-          <Upload size={16} /> Upload Resume
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            className="btn-pill flex-center gap-2"
+            onClick={() => setShowGroupsPanel(true)}
+            style={{ padding: '10px 16px' }}
+          >
+            <FolderOpen size={16} /> Manage Groups
+          </button>
+          <button className="btn-sarvam flex-center gap-2" onClick={() => setShowUploadModal(true)}>
+            <Upload size={16} /> Upload Resume
+          </button>
+        </div>
       </div>
 
       {/* Search & Filters */}
@@ -1602,10 +2041,41 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
             Walk-in
           </button>
 
+          {/* Group Filters */}
+          {groups.length > 0 && (
+            <>
+              <div style={{ width: '1px', height: '20px', background: '#E5E7EB', margin: '0 4px' }} />
+              {groups.map(group => (
+                <button
+                  key={group.id}
+                  onClick={() => setGroupFilter(groupFilter === String(group.id) ? 'all' : String(group.id))}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '20px',
+                    border: groupFilter === String(group.id) ? 'none' : '1px solid #E5E7EB',
+                    background: groupFilter === String(group.id) ? group.color : 'white',
+                    color: groupFilter === String(group.id) ? 'white' : '#374151',
+                    fontSize: '0.8rem',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  {groupFilter === String(group.id) && <Check size={12} />}
+                  <Tag size={12} />
+                  {group.name}
+                </button>
+              ))}
+            </>
+          )}
+
           {/* Active filter count */}
-          {(sourceFilter !== 'all' || walkinFilter !== 'all' || searchTerm) && (
+          {(sourceFilter !== 'all' || walkinFilter !== 'all' || groupFilter !== 'all' || searchTerm) && (
             <button
-              onClick={() => { setSourceFilter('all'); setWalkinFilter('all'); setSearchTerm(''); }}
+              onClick={() => { setSourceFilter('all'); setWalkinFilter('all'); setGroupFilter('all'); setSearchTerm(''); }}
               style={{
                 padding: '6px 12px',
                 borderRadius: '20px',
@@ -1707,23 +2177,97 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
                         {candidate.email}
                       </p>
                     </div>
-                    {/* Quick delete */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteCandidate(candidate); }}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '4px',
-                        cursor: 'pointer',
-                        opacity: 0.4,
-                        transition: 'opacity 0.15s',
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
-                      onMouseLeave={(e) => e.currentTarget.style.opacity = 0.4}
-                      title="Delete"
-                    >
-                      <Trash2 size={16} color="#666" />
-                    </button>
+                    {/* Quick actions */}
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      {/* Add to Group */}
+                      {groups.length > 0 && (
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!candidateGroups[candidate.id]) {
+                                fetchCandidateGroups(candidate.id);
+                              }
+                              setShowAddToGroupMenu(showAddToGroupMenu === candidate.id ? null : candidate.id);
+                            }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              padding: '4px',
+                              cursor: 'pointer',
+                              opacity: 0.4,
+                              transition: 'opacity 0.15s',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                            onMouseLeave={(e) => e.currentTarget.style.opacity = 0.4}
+                            title="Add to Group"
+                          >
+                            <Tag size={16} color="#666" />
+                          </button>
+                          {showAddToGroupMenu === candidate.id && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                position: 'absolute',
+                                top: '100%',
+                                right: 0,
+                                background: 'white',
+                                borderRadius: '12px',
+                                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                                padding: '8px',
+                                minWidth: '160px',
+                                zIndex: 100,
+                              }}
+                            >
+                              <div style={{ fontSize: '0.7rem', color: '#9CA3AF', padding: '4px 8px', marginBottom: '4px' }}>Add to group</div>
+                              {groups.map(group => {
+                                const isInGroup = candidateGroups[candidate.id]?.includes(group.id);
+                                return (
+                                  <button
+                                    key={group.id}
+                                    onClick={() => isInGroup ? handleRemoveFromGroup(candidate.id, group.id) : handleAddToGroup(candidate.id, group.id)}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      width: '100%',
+                                      padding: '8px',
+                                      border: 'none',
+                                      background: isInGroup ? '#F3F4F6' : 'transparent',
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.85rem',
+                                      textAlign: 'left',
+                                    }}
+                                  >
+                                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: group.color }} />
+                                    {group.name}
+                                    {isInGroup && <Check size={14} color="#10B981" style={{ marginLeft: 'auto' }} />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {/* Delete */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteCandidate(candidate); }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          padding: '4px',
+                          cursor: 'pointer',
+                          opacity: 0.4,
+                          transition: 'opacity 0.15s',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                        onMouseLeave={(e) => e.currentTarget.style.opacity = 0.4}
+                        title="Delete"
+                      >
+                        <Trash2 size={16} color="#666" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Skills */}
@@ -1753,7 +2297,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
 
                   {/* Footer */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #F3F4F6' }}>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                       <span style={{
                         fontSize: '0.7rem',
                         padding: '3px 8px',
@@ -1774,6 +2318,30 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
                           borderRadius: '6px',
                           fontWeight: 500,
                         }}>Walk-in</span>
+                      )}
+                      {/* Group badges */}
+                      {candidateGroups[candidate.id]?.slice(0, 2).map(groupId => {
+                        const group = groups.find(g => g.id === groupId);
+                        if (!group) return null;
+                        return (
+                          <span key={groupId} style={{
+                            fontSize: '0.65rem',
+                            padding: '2px 6px',
+                            background: group.color + '20',
+                            color: group.color,
+                            borderRadius: '4px',
+                            fontWeight: 500,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                          }}>
+                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: group.color }} />
+                            {group.name}
+                          </span>
+                        );
+                      })}
+                      {(candidateGroups[candidate.id]?.length || 0) > 2 && (
+                        <span style={{ fontSize: '0.65rem', color: '#9CA3AF' }}>+{candidateGroups[candidate.id].length - 2}</span>
                       )}
                     </div>
                     <span style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>
@@ -1858,6 +2426,119 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
         <ResumeUpload onUpload={handleUpload} />
       </Modal>
 
+      {/* Groups Management Panel */}
+      <Modal
+        isOpen={showGroupsPanel}
+        onClose={() => setShowGroupsPanel(false)}
+        title="Manage Candidate Groups"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
+            Organize candidates into groups to easily filter and manage them when screening for jobs.
+          </p>
+
+          {/* Create New Group */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.85rem', fontWeight: 500 }}>Group Name</label>
+              <input
+                type="text"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="e.g., Engineering, Accounts, HR"
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid #E5E7EB',
+                  fontSize: '0.9rem',
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.85rem', fontWeight: 500 }}>Color</label>
+              <input
+                type="color"
+                value={newGroupColor}
+                onChange={(e) => setNewGroupColor(e.target.value)}
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '10px',
+                  border: '1px solid #E5E7EB',
+                  cursor: 'pointer',
+                  padding: '2px',
+                }}
+              />
+            </div>
+            <button
+              className="btn-sarvam"
+              onClick={handleCreateGroup}
+              disabled={!newGroupName.trim()}
+              style={{ padding: '10px 20px' }}
+            >
+              <Plus size={16} /> Create Group
+            </button>
+          </div>
+
+          {/* Existing Groups */}
+          {groups.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Your Groups</h4>
+              {groups.map(group => (
+                <div
+                  key={group.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 16px',
+                    background: '#FAFAFA',
+                    borderRadius: '12px',
+                    border: '1px solid #EAEAEA',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '16px',
+                      height: '16px',
+                      borderRadius: '50%',
+                      background: group.color,
+                    }} />
+                    <span style={{ fontWeight: 500 }}>{group.name}</span>
+                    {group.description && (
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{group.description}</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleDeleteGroup(group.id)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      padding: '6px',
+                      cursor: 'pointer',
+                      color: '#DC2626',
+                      opacity: 0.6,
+                      transition: 'opacity 0.15s',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = 0.6}
+                    title="Delete group"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '40px', background: '#FAFAFA', borderRadius: '12px' }}>
+              <FolderOpen size={32} color="var(--text-muted)" style={{ marginBottom: '12px' }} />
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>No groups yet. Create one to start organizing candidates.</p>
+            </div>
+          )}
+        </div>
+      </Modal>
+
       {/* Candidate Detail Modal */}
       <Modal isOpen={showDetailModal} onClose={closeDetailModal} title={selectedCandidate ? `Candidate: ${formatName(selectedCandidate.name)}` : ''} size="lg">
         {selectedCandidate && (
@@ -1895,6 +2576,44 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
               <span className="chip chip-blue">{selectedCandidate.source}</span>
               {selectedCandidate.attended_walkin_drive && <span className="chip chip-green">Walk-in</span>}
             </div>
+
+            {/* Groups */}
+            {groups.length > 0 && (
+              <div style={{ background: '#F9FAFB', padding: '14px 16px', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>Groups:</span>
+                  {groups.map(group => {
+                    const isInGroup = candidateGroups[selectedCandidate.id]?.includes(group.id);
+                    return (
+                      <button
+                        key={group.id}
+                        onClick={() => isInGroup
+                          ? handleRemoveFromGroup(selectedCandidate.id, group.id)
+                          : handleAddToGroup(selectedCandidate.id, group.id)
+                        }
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 12px',
+                          borderRadius: '20px',
+                          border: isInGroup ? 'none' : '1px dashed #D1D5DB',
+                          background: isInGroup ? group.color : 'transparent',
+                          color: isInGroup ? 'white' : '#6B7280',
+                          fontSize: '0.8rem',
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {isInGroup ? <Check size={12} /> : <Plus size={12} />}
+                        {group.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Summary */}
             {(selectedCandidate.parsed_data?.summary || selectedCandidate.parsed_data?.bio) && (
