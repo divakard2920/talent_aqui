@@ -1504,43 +1504,159 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
         )}
       </div>
 
-      {/* Filters & Search */}
-      <div className="sovereign-card" style={{ padding: '16px' }}>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ flex: 1, minWidth: '200px' }}>
-            <input
-              type="text"
-              placeholder="Search by name, email, or skill..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-elegant"
-              style={{ width: '100%' }}
-            />
-          </div>
-          <select
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            className="input-elegant"
-            style={{ minWidth: '140px' }}
+      {/* Search & Filters */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {/* Search Bar */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          background: 'white',
+          borderRadius: '14px',
+          padding: '6px 6px 6px 18px',
+          border: '1px solid #E5E7EB',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        }}>
+          <Search size={18} color="#9CA3AF" />
+          <input
+            type="text"
+            placeholder="Search candidates by name, email, or skill..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              flex: 1,
+              border: 'none',
+              outline: 'none',
+              fontSize: '0.95rem',
+              background: 'transparent',
+              color: '#111',
+            }}
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              style={{
+                background: '#F3F4F6',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '6px 10px',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                color: '#6B7280',
+              }}
+            >
+              Clear
+            </button>
+          )}
+          <button
+            onClick={fetchCandidates}
+            style={{
+              background: 'var(--brand-navy)',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '10px 16px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              color: 'white',
+              fontSize: '0.85rem',
+              fontWeight: 500,
+            }}
           >
-            <option value="all">All Sources</option>
-            {uniqueSources.map(source => (
-              <option key={source} value={source}>{source.replace('_', ' ')}</option>
-            ))}
-          </select>
-          <select
-            value={walkinFilter}
-            onChange={(e) => setWalkinFilter(e.target.value)}
-            className="input-elegant"
-            style={{ minWidth: '140px' }}
-          >
-            <option value="all">All Candidates</option>
-            <option value="walkin">Walk-in Only</option>
-            <option value="non-walkin">Non Walk-in</option>
-          </select>
-          <button className="btn-pill" onClick={fetchCandidates} title="Refresh">
-            <RefreshCw size={16} />
+            <RefreshCw size={14} />
           </button>
+        </div>
+
+        {/* Filter Pills */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.8rem', color: '#6B7280', marginRight: '4px' }}>Filter:</span>
+
+          {/* Source Filters */}
+          <button
+            onClick={() => setSourceFilter('all')}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '20px',
+              border: sourceFilter === 'all' ? 'none' : '1px solid #E5E7EB',
+              background: sourceFilter === 'all' ? 'var(--brand-navy)' : 'white',
+              color: sourceFilter === 'all' ? 'white' : '#374151',
+              fontSize: '0.8rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            All Sources
+          </button>
+          {uniqueSources.map(source => (
+            <button
+              key={source}
+              onClick={() => setSourceFilter(source)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '20px',
+                border: sourceFilter === source ? 'none' : '1px solid #E5E7EB',
+                background: sourceFilter === source ? (source === 'github' ? '#24292e' : '#4F46E5') : 'white',
+                color: sourceFilter === source ? 'white' : '#374151',
+                fontSize: '0.8rem',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                textTransform: 'capitalize',
+              }}
+            >
+              {source.replace('_', ' ')}
+            </button>
+          ))}
+
+          {/* Divider */}
+          <div style={{ width: '1px', height: '20px', background: '#E5E7EB', margin: '0 4px' }} />
+
+          {/* Walk-in Filters */}
+          <button
+            onClick={() => setWalkinFilter(walkinFilter === 'walkin' ? 'all' : 'walkin')}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '20px',
+              border: walkinFilter === 'walkin' ? 'none' : '1px solid #E5E7EB',
+              background: walkinFilter === 'walkin' ? '#10B981' : 'white',
+              color: walkinFilter === 'walkin' ? 'white' : '#374151',
+              fontSize: '0.8rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            {walkinFilter === 'walkin' && <Check size={12} />}
+            Walk-in
+          </button>
+
+          {/* Active filter count */}
+          {(sourceFilter !== 'all' || walkinFilter !== 'all' || searchTerm) && (
+            <button
+              onClick={() => { setSourceFilter('all'); setWalkinFilter('all'); setSearchTerm(''); }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '20px',
+                border: 'none',
+                background: '#FEE2E2',
+                color: '#DC2626',
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                marginLeft: 'auto',
+              }}
+            >
+              <X size={12} /> Clear filters
+            </button>
+          )}
         </div>
       </div>
 
