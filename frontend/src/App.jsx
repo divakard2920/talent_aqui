@@ -904,7 +904,11 @@ function JobsView({ showToast, onViewCandidate }) {
                   </div>
                   <h3 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>{job.title}</h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
-                    {job.experience_min_years}-{job.experience_max_years || '+'} years experience
+                    {job.experience_max_years
+                      ? (job.experience_min_years === job.experience_max_years
+                          ? `${job.experience_min_years} years experience`
+                          : `${job.experience_min_years}-${job.experience_max_years} years experience`)
+                      : `${job.experience_min_years}+ years experience`}
                   </p>
                 </div>
 
