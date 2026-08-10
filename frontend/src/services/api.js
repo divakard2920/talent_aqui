@@ -79,10 +79,12 @@ export const interviewApi = {
   start: (id) => api.post(`/interviews/${id}/start`),
   respond: (id, audioBase64) =>
     api.post(`/interviews/${id}/respond`, { interview_id: id, audio_base64: audioBase64 }),
+  respondMic: (id) => api.post(`/interviews/${id}/respond-mic`),
   respondText: (id, text) =>
     api.post(`/interviews/${id}/respond-text?text=${encodeURIComponent(text)}`),
   end: (id) => api.post(`/interviews/${id}/end`),
   cancel: (id) => api.delete(`/interviews/${id}`),
+  getConfig: () => api.get('/interviews/config'),
 };
 
 // Walk-in Drive API

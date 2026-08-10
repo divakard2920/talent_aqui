@@ -14,12 +14,28 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
   const [useTextMode, setUseTextMode] = useState(false); // Fallback for no mic access
   const [textInput, setTextInput] = useState('');
   const [micError, setMicError] = useState(false);
+  const [serverMicAvailable, setServerMicAvailable] = useState(false); // Server-side mic via Azure Speech
+  const [useServerMic, setUseServerMic] = useState(false); // Using server mic instead of browser mic
+  const [isListening, setIsListening] = useState(false); // Server mic listening state
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioContextRef = useRef(null);
   const streamRef = useRef(null);
   const textInputRef = useRef(null);
+
+  // Fetch config on mount to check if server mic is available
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await interviewApi.getConfig();
+        setServerMicAvailable(res.data.server_mic_available);
+      } catch (err) {
+        console.log('Could not fetch interview config:', err.message);
+      }
+    };
+    fetchConfig();
+  }, []);
 
   // Prevent browser refresh/close during active interview
   useEffect(() => {
@@ -120,7 +136,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
     });
   };
 
-  // Start recording
+  // Start recording (browser mic)
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -140,8 +156,69 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
       setIsRecording(true);
     } catch (err) {
       setMicError(true);
-      setUseTextMode(true);
-      setError('Microphone not available. Switched to text mode.');
+      // If server mic is available (Azure Speech Service enabled), use it instead of text mode
+      if (serverMicAvailable) {
+        setUseServerMic(true);
+        setError('Browser mic blocked. Using server microphone instead.');
+      } else {
+        setUseTextMode(true);
+        setError('Microphone not available. Switched to text mode.');
+      }
+    }
+  };
+
+  // Use server-side microphone (Azure Speech Service)
+  const useServerMicrophone = async () => {
+    if (status !== 'active' || isSpeaking) return;
+
+    setIsListening(true);
+    setError(null);
+    setStatus('processing');
+
+    try {
+      const res = await interviewApi.respondMic(interview.id);
+
+      // If no speech detected
+      if (!res.data.candidate_transcript) {
+        setError('No speech detected. Please try again.');
+        setStatus('active');
+        setIsListening(false);
+        return;
+      }
+
+      // Add candidate's response to transcript
+      setTranscript(prev => [...prev, {
+        role: 'candidate',
+        content: res.data.candidate_transcript,
+        timestamp: new Date().toISOString(),
+      }]);
+
+      // Add AI's response
+      setTranscript(prev => [...prev, {
+        role: 'ai',
+        content: res.data.ai_message,
+        timestamp: new Date().toISOString(),
+      }]);
+
+      // Play AI's audio response
+      if (res.data.ai_audio_base64) {
+        await playAudio(res.data.ai_audio_base64);
+      }
+
+      // Check if interview is complete
+      if (res.data.is_complete) {
+        setStatus('completed');
+        const evalRes = await interviewApi.get(interview.id);
+        setEvaluation(evalRes.data.evaluation);
+        onComplete?.(evalRes.data);
+      } else {
+        setStatus('active');
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to capture audio from server mic');
+      setStatus('active');
+    } finally {
+      setIsListening(false);
     }
   };
 
@@ -450,7 +527,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
           }}>
             {status === 'ready' && 'Ready to Connect'}
             {status === 'starting' && 'Connecting...'}
-            {status === 'active' && (isRecording ? 'Recording...' : isSpeaking ? `${INTERVIEWER_NAME} is speaking...` : 'Your turn')}
+            {status === 'active' && (isRecording ? 'Recording...' : isListening ? 'Listening (Server)...' : isSpeaking ? `${INTERVIEWER_NAME} is speaking...` : 'Your turn')}
             {status === 'processing' && 'Processing...'}
             {status === 'completed' && 'Call Ended'}
           </div>
@@ -566,16 +643,16 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
         borderTop: '1px solid var(--border-light)',
       }}>
         {/* Mode toggle */}
-        {status === 'active' && !isSpeaking && (
+        {status === 'active' && !isSpeaking && !isListening && (
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
             <button
-              onClick={() => setUseTextMode(false)}
+              onClick={() => { setUseTextMode(false); setUseServerMic(false); }}
               style={{
                 padding: '6px 16px',
                 borderRadius: '20px 0 0 20px',
                 border: '1px solid var(--border-strong)',
-                background: !useTextMode ? 'var(--brand-navy)' : 'white',
-                color: !useTextMode ? 'white' : 'var(--text-primary)',
+                background: !useTextMode && !useServerMic ? 'var(--brand-navy)' : 'white',
+                color: !useTextMode && !useServerMic ? 'white' : 'var(--text-primary)',
                 fontSize: '0.8rem',
                 cursor: micError ? 'not-allowed' : 'pointer',
                 opacity: micError ? 0.5 : 1,
@@ -584,17 +661,34 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
             >
               <Mic size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Voice
             </button>
+            {serverMicAvailable && (
+              <button
+                onClick={() => { setUseServerMic(true); setUseTextMode(false); }}
+                style={{
+                  padding: '6px 16px',
+                  border: '1px solid var(--border-strong)',
+                  borderLeft: 'none',
+                  background: useServerMic ? 'var(--brand-navy)' : 'white',
+                  color: useServerMic ? 'white' : 'var(--text-primary)',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                }}
+              >
+                <Mic size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Server Mic
+              </button>
+            )}
             <button
-              onClick={() => setUseTextMode(true)}
+              onClick={() => { setUseTextMode(true); setUseServerMic(false); }}
               style={{
                 padding: '6px 16px',
-                borderRadius: '0 20px 20px 0',
+                borderRadius: serverMicAvailable ? '0' : '0 20px 20px 0',
                 border: '1px solid var(--border-strong)',
                 borderLeft: 'none',
                 background: useTextMode ? 'var(--brand-navy)' : 'white',
                 color: useTextMode ? 'white' : 'var(--text-primary)',
                 fontSize: '0.8rem',
                 cursor: 'pointer',
+                ...(serverMicAvailable ? { borderRadius: '0 20px 20px 0' } : {}),
               }}
             >
               <MessageSquare size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Text
@@ -609,7 +703,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
             </button>
           )}
 
-          {status === 'active' && !isSpeaking && !useTextMode && (
+          {status === 'active' && !isSpeaking && !useTextMode && !useServerMic && (
             <>
               {!isRecording ? (
                 <button
@@ -633,6 +727,28 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
                 <PhoneOff size={18} /> End Call
               </button>
             </>
+          )}
+
+          {status === 'active' && !isSpeaking && useServerMic && !isListening && (
+            <>
+              <button
+                className="btn-sarvam"
+                onClick={useServerMicrophone}
+                style={{ background: '#287A4F' }}
+              >
+                <Mic size={18} /> Click to Speak (Server Mic)
+              </button>
+              <button className="btn-pill" onClick={endInterview}>
+                <PhoneOff size={18} /> End Call
+              </button>
+            </>
+          )}
+
+          {status === 'active' && isListening && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-muted)' }}>
+              <Mic size={24} className="pulse" style={{ color: '#DC2626' }} />
+              <span>Listening... Speak now</span>
+            </div>
           )}
 
           {status === 'active' && !isSpeaking && useTextMode && (

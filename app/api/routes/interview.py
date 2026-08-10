@@ -27,6 +27,20 @@ router = APIRouter(prefix="/interviews", tags=["interviews"])
 active_sessions: dict[int, InterviewEngine] = {}
 
 
+@router.get("/config")
+async def get_interview_config():
+    """
+    Get interview configuration including whether server-side mic is available.
+    """
+    from app.config import get_settings
+    settings = get_settings()
+
+    return {
+        "server_mic_available": settings.use_azure_speech_service,
+        "speech_service": "azure_speech" if settings.use_azure_speech_service else "openai",
+    }
+
+
 @router.post("/", response_model=InterviewResponse)
 async def create_interview(
     request: InterviewCreate,
@@ -268,6 +282,97 @@ async def process_candidate_response(
         candidate_text = voice_service.speech_to_text(request.audio_base64)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not process audio: {str(e)}")
+
+    # Process response and get AI's reply
+    result = engine.process_response(candidate_text)
+
+    ai_response = result["ai_response"]
+    is_complete = result["is_complete"]
+
+    # Convert AI response to speech
+    try:
+        audio_base64 = voice_service.text_to_speech(ai_response)
+    except Exception as e:
+        print(f"TTS failed: {e}")
+        audio_base64 = None
+
+    # If interview is complete, finalize
+    if is_complete:
+        evaluation = engine.generate_evaluation()
+        transcript = engine.get_transcript()
+
+        interview.status = InterviewStatus.COMPLETED.value
+        interview.completed_at = datetime.utcnow()
+        interview.duration_minutes = int(
+            (datetime.utcnow() - interview.started_at).total_seconds() / 60
+        )
+        interview.transcript = transcript
+        interview.evaluation = evaluation
+
+        # Clean up session
+        del active_sessions[interview_id]
+
+        await db.commit()
+
+    return {
+        "candidate_transcript": candidate_text,
+        "ai_message": ai_response,
+        "ai_audio_base64": audio_base64,
+        "is_complete": is_complete,
+        "phase": result.get("phase", "unknown"),
+    }
+
+
+@router.post("/{interview_id}/respond-mic")
+async def process_candidate_microphone(
+    interview_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Listen from server's microphone and process candidate's response.
+
+    For demo purposes when browser mic permissions are blocked.
+    Requires USE_AZURE_SPEECH_SERVICE=true.
+    """
+    from app.config import get_settings
+    settings = get_settings()
+
+    if not settings.use_azure_speech_service:
+        raise HTTPException(
+            status_code=400,
+            detail="Server-side microphone requires USE_AZURE_SPEECH_SERVICE=true"
+        )
+
+    # Check interview exists and is in progress
+    result = await db.execute(
+        select(Interview).where(Interview.id == interview_id)
+    )
+    interview = result.scalar_one_or_none()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    if interview.status != InterviewStatus.IN_PROGRESS.value:
+        raise HTTPException(status_code=400, detail="Interview is not in progress")
+
+    # Get session
+    engine = active_sessions.get(interview_id)
+    if not engine:
+        raise HTTPException(status_code=400, detail="Interview session not found. Please restart.")
+
+    # Listen from server microphone
+    try:
+        candidate_text = voice_service.listen_from_microphone(timeout_seconds=15)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Microphone error: {str(e)}")
+
+    if not candidate_text:
+        return {
+            "candidate_transcript": "",
+            "ai_message": "I didn't catch that. Could you please repeat?",
+            "ai_audio_base64": None,
+            "is_complete": False,
+            "phase": engine.current_phase if hasattr(engine, 'current_phase') else "unknown",
+        }
 
     # Process response and get AI's reply
     result = engine.process_response(candidate_text)

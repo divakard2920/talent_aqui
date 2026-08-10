@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     azure_openai_tts_deployment: str | None = None  # e.g., "gpt-4o-mini-tts"
     azure_openai_whisper_deployment: str | None = None  # e.g., "whisper"
 
+    # Azure Speech Service (alternative to OpenAI TTS/Whisper)
+    # Set USE_AZURE_SPEECH_SERVICE=true to use Azure Speech instead of OpenAI
+    use_azure_speech_service: bool = False
+    azure_speech_endpoint: str | None = None  # e.g., https://swedencentral.api.cognitive.microsoft.com/
+
     class Config:
         env_file = ".env"
 

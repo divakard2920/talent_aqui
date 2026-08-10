@@ -1,7 +1,9 @@
 """
 Voice Service - Handles Text-to-Speech and Speech-to-Text.
 
-Uses Azure OpenAI's TTS and Whisper for natural voice interactions.
+Supports two backends:
+1. Azure OpenAI (TTS and Whisper models)
+2. Azure Speech Service (when USE_AZURE_SPEECH_SERVICE=true)
 """
 
 import base64
@@ -19,15 +21,25 @@ class VoiceService:
     """Handles voice synthesis and recognition."""
 
     def __init__(self):
-        # Initialize Azure OpenAI client
-        self.client = None
-        self._initialize_client()
+        # Check if Azure Speech Service should be used
+        self.use_azure_speech = settings.use_azure_speech_service
+
+        if self.use_azure_speech:
+            # Use Azure Speech Service
+            from app.services.azure_speech_service import get_azure_speech_service
+            self.azure_speech = get_azure_speech_service()
+            self.client = None
+        else:
+            # Use Azure OpenAI TTS/Whisper
+            self.azure_speech = None
+            self.client = None
+            self._initialize_client()
 
         # Voice settings for natural conversation
         self.voice = "echo"  # Male, warm voice for Devin. Options: alloy, echo, fable, onyx, nova, shimmer
         self.speed = 1.0
 
-        # Azure deployment names
+        # Azure deployment names (for OpenAI mode)
         self.tts_deployment = settings.azure_openai_tts_deployment or "tts"
         self.whisper_deployment = settings.azure_openai_whisper_deployment or "whisper"
 
@@ -67,7 +79,7 @@ class VoiceService:
 
     def text_to_speech(self, text: str) -> str:
         """
-        Convert text to speech using Azure OpenAI TTS.
+        Convert text to speech.
 
         Args:
             text: The text to convert to speech
@@ -75,6 +87,11 @@ class VoiceService:
         Returns:
             Base64 encoded audio (MP3 format)
         """
+        # Use Azure Speech Service if enabled
+        if self.use_azure_speech:
+            return self.azure_speech.text_to_speech(text)
+
+        # Otherwise use Azure OpenAI TTS
         if not self.client:
             raise Exception("Voice service not initialized. Check Azure OpenAI configuration.")
 
@@ -101,7 +118,7 @@ class VoiceService:
 
     def speech_to_text(self, audio_base64: str, max_retries: int = 3) -> str:
         """
-        Convert speech to text using Azure OpenAI Whisper.
+        Convert speech to text.
 
         Args:
             audio_base64: Base64 encoded audio
@@ -110,6 +127,11 @@ class VoiceService:
         Returns:
             Transcribed text
         """
+        # Use Azure Speech Service if enabled
+        if self.use_azure_speech:
+            return self.azure_speech.speech_to_text(audio_base64)
+
+        # Otherwise use Azure OpenAI Whisper
         if not self.client:
             raise Exception("Voice service not initialized. Check Azure OpenAI configuration.")
 
@@ -153,26 +175,42 @@ class VoiceService:
         """
         Set the TTS voice.
 
-        Options: alloy, echo, fable, onyx, nova, shimmer
-        - alloy: Neutral, balanced
-        - echo: Male, warm
-        - fable: British, narrative
-        - onyx: Deep, authoritative
-        - nova: Female, warm, conversational (recommended)
-        - shimmer: Female, clear, professional
+        For OpenAI: alloy, echo, fable, onyx, nova, shimmer
+        For Azure Speech: en-US-GuyNeural, en-US-JennyNeural, etc.
         """
-        valid_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
-        if voice in valid_voices:
-            self.voice = voice
+        if self.use_azure_speech:
+            self.azure_speech.set_voice(voice)
         else:
-            raise ValueError(f"Invalid voice. Choose from: {valid_voices}")
+            valid_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+            if voice in valid_voices:
+                self.voice = voice
+            else:
+                raise ValueError(f"Invalid voice. Choose from: {valid_voices}")
 
     def set_speed(self, speed: float):
-        """Set speech speed (0.25 to 4.0, default 1.0)."""
-        if 0.25 <= speed <= 4.0:
-            self.speed = speed
+        """Set speech speed (0.5 to 2.0 for Azure Speech, 0.25 to 4.0 for OpenAI)."""
+        if self.use_azure_speech:
+            self.azure_speech.set_speed(speed)
         else:
-            raise ValueError("Speed must be between 0.25 and 4.0")
+            if 0.25 <= speed <= 4.0:
+                self.speed = speed
+            else:
+                raise ValueError("Speed must be between 0.25 and 4.0")
+
+    def listen_from_microphone(self, timeout_seconds: int = 15) -> str:
+        """
+        Listen from server's microphone directly (bypasses browser).
+
+        Only available when USE_AZURE_SPEECH_SERVICE=true.
+        For demo purposes when browser mic permissions are blocked.
+
+        Returns:
+            Transcribed text from microphone
+        """
+        if not self.use_azure_speech:
+            raise Exception("Server-side microphone only available with Azure Speech Service. Set USE_AZURE_SPEECH_SERVICE=true")
+
+        return self.azure_speech.listen_from_microphone(timeout_seconds)
 
 
 # Singleton instance
