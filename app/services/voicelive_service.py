@@ -299,7 +299,6 @@ class VoiceLiveInterview:
                 Modality,
                 OutputAudioFormat,
                 ServerEventType,
-                InputAudioTranscription,
             )
         except ImportError:
             raise Exception("azure-ai-voicelive not installed. Run: pip install azure-ai-voicelive")
@@ -336,9 +335,6 @@ class VoiceLiveInterview:
                     silence_duration_ms=1000,  # Wait 1 second of silence before ending turn
                 )
 
-                # Enable input audio transcription to get candidate's speech as text
-                input_transcription = InputAudioTranscription(model="whisper-1")
-
                 session_config = RequestSession(
                     modalities=[Modality.TEXT, Modality.AUDIO],
                     instructions=self.get_instructions(),
@@ -346,7 +342,6 @@ class VoiceLiveInterview:
                     input_audio_format=OutputAudioFormat.PCM16,
                     output_audio_format=OutputAudioFormat.PCM16,
                     turn_detection=turn_detection,
-                    input_audio_transcription=input_transcription,
                 )
 
                 await connection.session.update(session=session_config)
@@ -403,7 +398,7 @@ class VoiceLiveInterview:
             await self.audio_processor.start_playback()
 
         elif event.type == ServerEventType.CONVERSATION_ITEM_CREATED:
-            # Check if this contains user input
+            # Check if this contains user input with transcription
             if hasattr(event, 'item') and event.item:
                 item = event.item
                 if hasattr(item, 'role') and item.role == 'user':
@@ -411,13 +406,21 @@ class VoiceLiveInterview:
                     content_text = None
                     if hasattr(item, 'content') and item.content:
                         for part in item.content:
-                            if hasattr(part, 'transcript'):
+                            if hasattr(part, 'transcript') and part.transcript:
                                 content_text = part.transcript
-                            elif hasattr(part, 'text'):
+                            elif hasattr(part, 'text') and part.text:
                                 content_text = part.text
                     if content_text:
                         logger.info(f"User input from CONVERSATION_ITEM_CREATED: {content_text[:100]}")
-                        # Don't add here - wait for transcription complete event
+                        print(f"\n[Candidate]: {content_text}")
+                        self.transcript.append({
+                            "role": "user",
+                            "content": content_text,
+                            "timestamp": datetime.utcnow().isoformat(),
+                        })
+                        self.candidate_responses += 1
+                        if self.on_transcript_update:
+                            self.on_transcript_update(self.transcript)
 
         elif event.type == ServerEventType.RESPONSE_AUDIO_DELTA:
             await self.audio_processor.queue_audio(event.delta)
