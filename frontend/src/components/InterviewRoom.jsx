@@ -43,7 +43,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
 
   // Poll for transcript updates in VoiceLive mode
   useEffect(() => {
-    if (voiceLiveMode && status === 'active') {
+    if (voiceLiveMode && (status === 'active' || status === 'processing')) {
       pollingRef.current = setInterval(async () => {
         try {
           const res = await interviewApi.get(interview.id);
@@ -55,10 +55,16 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
             })));
           }
           if (res.data.status === 'completed') {
-            setStatus('completed');
-            setEvaluation(res.data.evaluation);
-            onComplete?.(res.data);
-            clearInterval(pollingRef.current);
+            // Only show completed if evaluation has real scores (not just generated in background)
+            if (res.data.evaluation && res.data.evaluation.overall_score !== undefined) {
+              setStatus('completed');
+              setEvaluation(res.data.evaluation);
+              onComplete?.(res.data);
+              clearInterval(pollingRef.current);
+            } else {
+              // Still waiting for evaluation - keep polling
+              setStatus('processing');
+            }
           }
         } catch (err) {
           console.log('Polling error:', err.message);
@@ -407,9 +413,20 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
     };
   }, []);
 
+  // Show loading while evaluation is being generated
+  if (status === 'processing' && voiceLiveMode) {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center' }}>
+        <Loader2 size={48} className="spin" style={{ margin: '40px auto', color: 'var(--brand-navy)' }} />
+        <h3>Generating Evaluation...</h3>
+        <p style={{ color: 'var(--text-muted)' }}>Please wait while we analyze the interview.</p>
+      </div>
+    );
+  }
+
   // Render evaluation results
   if (status === 'completed' && evaluation) {
-    const isIncomplete = evaluation.incomplete || evaluation.overall_score === 0;
+    const isIncomplete = evaluation.incomplete === true && evaluation.overall_score === 0;
 
     // Show incomplete/no-response state
     if (isIncomplete) {

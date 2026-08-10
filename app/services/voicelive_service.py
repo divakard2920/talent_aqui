@@ -473,7 +473,10 @@ class VoiceLiveInterview:
 
     def generate_evaluation(self) -> dict:
         """Generate evaluation using InterviewEngine's logic."""
+        logger.info(f"Generating evaluation. Transcript entries: {len(self.transcript)}")
+
         if not self.transcript:
+            logger.warning("No transcript available for evaluation")
             return {
                 "overall_score": 0,
                 "communication_score": 0,
@@ -501,7 +504,14 @@ class VoiceLiveInterview:
         self.interview_engine.candidate_responses = [
             t["content"] for t in self.transcript if t["role"] in ["user", "candidate"]
         ]
-        return self.interview_engine.generate_evaluation()
+
+        logger.info(f"Candidate responses count: {len(self.interview_engine.candidate_responses)}")
+        logger.info(f"Conversation history count: {len(self.interview_engine.conversation_history)}")
+
+        evaluation = self.interview_engine.generate_evaluation()
+        logger.info(f"Evaluation generated. Score: {evaluation.get('overall_score')}, Recommendation: {evaluation.get('recommendation')}")
+
+        return evaluation
 
 
 def check_audio_devices() -> dict:
