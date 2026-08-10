@@ -249,14 +249,13 @@ class VoiceLiveInterview:
             company_name=company_name,
         )
 
-        # VoiceLive endpoint (same as OpenAI endpoint but WebSocket)
+        # VoiceLive endpoint - SDK adds its own path, just provide base URL
         self.endpoint = settings.azure_openai_endpoint.rstrip("/")
-        # Convert to WebSocket URL for realtime API
+        # Convert to WebSocket URL
         self.endpoint = self.endpoint.replace("https://", "wss://").replace("http://", "ws://")
-        self.endpoint += "/openai/realtime"
 
-        self.model = "gpt-4o-realtime-preview"
-        self.voice = "en-US-AvaNeural"
+        self.model = settings.voicelive_model or "gpt-4o-realtime-preview"
+        self.voice = settings.voicelive_voice or "en-US-AvaNeural"
 
         # State
         self.connection = None
