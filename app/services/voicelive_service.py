@@ -378,7 +378,30 @@ class VoiceLiveInterview:
     async def _handle_event(self, event, connection, ServerEventType):
         """Handle VoiceLive events."""
         # Log all event types for debugging
-        logger.info(f"Event received: {event.type}")
+        event_type_str = str(event.type) if event.type else ""
+        logger.info(f"Event received: {event_type_str}")
+
+        # Handle transcription completion by string matching (in case enum doesn't match)
+        if 'input_audio_transcription' in event_type_str.lower() and 'completed' in event_type_str.lower():
+            logger.info(f"Transcription completed event: {event}")
+            transcript_text = None
+            if hasattr(event, 'transcript'):
+                transcript_text = event.transcript
+            elif hasattr(event, 'content_part') and hasattr(event.content_part, 'transcript'):
+                transcript_text = event.content_part.transcript
+
+            if transcript_text:
+                logger.info(f"Captured candidate transcript: {transcript_text}")
+                print(f"\n[Candidate]: {transcript_text}")
+                self.transcript.append({
+                    "role": "user",
+                    "content": transcript_text,
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+                self.candidate_responses += 1
+                if self.on_transcript_update:
+                    self.on_transcript_update(self.transcript)
+            return
 
         if event.type == ServerEventType.SESSION_UPDATED:
             logger.info(f"Session ready: {event.session.id}")
@@ -503,10 +526,29 @@ class VoiceLiveInterview:
             print(f"\n[Error]: {event.error.message}")
 
         else:
-            # Log unhandled events that might contain useful data
-            event_name = str(event.type).split('.')[-1] if hasattr(event.type, '__str__') else str(event.type)
-            if 'INPUT' in event_name.upper() or 'TRANSCRIPT' in event_name.upper() or 'SPEECH' in event_name.upper():
-                logger.info(f"Unhandled speech-related event: {event.type}, attrs: {dir(event)}")
+            # Log unhandled events and try to capture transcription from any event
+            event_name = str(event.type) if hasattr(event.type, '__str__') else str(event.type)
+            logger.info(f"Unhandled event: {event_name}")
+
+            # Check if this event contains transcription data
+            if 'transcription' in event_name.lower():
+                logger.info(f"Transcription event found! Full event: {event}")
+                # Try to extract transcript
+                transcript_text = None
+                if hasattr(event, 'transcript'):
+                    transcript_text = event.transcript
+                elif hasattr(event, 'content_part') and hasattr(event.content_part, 'transcript'):
+                    transcript_text = event.content_part.transcript
+
+                if transcript_text:
+                    logger.info(f"Got transcript from unhandled event: {transcript_text}")
+                    print(f"\n[Candidate]: {transcript_text}")
+                    self.transcript.append({
+                        "role": "user",
+                        "content": transcript_text,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    })
+                    self.candidate_responses += 1
 
     async def stop(self):
         """Stop the interview immediately."""
