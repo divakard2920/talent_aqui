@@ -299,6 +299,7 @@ class VoiceLiveInterview:
                 Modality,
                 OutputAudioFormat,
                 ServerEventType,
+                InputAudioTranscription,
             )
         except ImportError:
             raise Exception("azure-ai-voicelive not installed. Run: pip install azure-ai-voicelive")
@@ -335,6 +336,9 @@ class VoiceLiveInterview:
                     silence_duration_ms=1000,  # Wait 1 second of silence before ending turn
                 )
 
+                # Enable input audio transcription to get candidate's speech as text
+                input_transcription = InputAudioTranscription(model="whisper-1")
+
                 session_config = RequestSession(
                     modalities=[Modality.TEXT, Modality.AUDIO],
                     instructions=self.get_instructions(),
@@ -342,6 +346,7 @@ class VoiceLiveInterview:
                     input_audio_format=OutputAudioFormat.PCM16,
                     output_audio_format=OutputAudioFormat.PCM16,
                     turn_detection=turn_detection,
+                    input_audio_transcription=input_transcription,
                 )
 
                 await connection.session.update(session=session_config)
@@ -377,6 +382,9 @@ class VoiceLiveInterview:
 
     async def _handle_event(self, event, connection, ServerEventType):
         """Handle VoiceLive events."""
+        # Log all event types for debugging
+        logger.debug(f"Event received: {event.type}")
+
         if event.type == ServerEventType.SESSION_UPDATED:
             logger.info(f"Session ready: {event.session.id}")
             await self.audio_processor.start_capture()
@@ -393,6 +401,23 @@ class VoiceLiveInterview:
         elif event.type == ServerEventType.INPUT_AUDIO_BUFFER_SPEECH_STOPPED:
             logger.info("Candidate stopped speaking")
             await self.audio_processor.start_playback()
+
+        elif event.type == ServerEventType.CONVERSATION_ITEM_CREATED:
+            # Check if this contains user input
+            if hasattr(event, 'item') and event.item:
+                item = event.item
+                if hasattr(item, 'role') and item.role == 'user':
+                    # Try to get content
+                    content_text = None
+                    if hasattr(item, 'content') and item.content:
+                        for part in item.content:
+                            if hasattr(part, 'transcript'):
+                                content_text = part.transcript
+                            elif hasattr(part, 'text'):
+                                content_text = part.text
+                    if content_text:
+                        logger.info(f"User input from CONVERSATION_ITEM_CREATED: {content_text[:100]}")
+                        # Don't add here - wait for transcription complete event
 
         elif event.type == ServerEventType.RESPONSE_AUDIO_DELTA:
             await self.audio_processor.queue_audio(event.delta)
@@ -421,16 +446,35 @@ class VoiceLiveInterview:
                 print()
 
         elif event.type == ServerEventType.CONVERSATION_ITEM_INPUT_AUDIO_TRANSCRIPTION_COMPLETED:
+            # Try different attribute names for the transcription
+            transcript_text = None
             if hasattr(event, 'transcript') and event.transcript:
-                print(f"\n[Candidate]: {event.transcript}")
+                transcript_text = event.transcript
+            elif hasattr(event, 'text') and event.text:
+                transcript_text = event.text
+            elif hasattr(event, 'transcription') and event.transcription:
+                transcript_text = event.transcription
+            elif hasattr(event, 'content_part') and event.content_part:
+                if hasattr(event.content_part, 'transcript'):
+                    transcript_text = event.content_part.transcript
+                elif hasattr(event.content_part, 'text'):
+                    transcript_text = event.content_part.text
+
+            # Log the event for debugging
+            logger.info(f"Transcription event received. Attributes: {dir(event)}")
+
+            if transcript_text:
+                print(f"\n[Candidate]: {transcript_text}")
                 self.transcript.append({
                     "role": "user",
-                    "content": event.transcript,
+                    "content": transcript_text,
                     "timestamp": datetime.utcnow().isoformat(),
                 })
                 self.candidate_responses += 1
                 if self.on_transcript_update:
                     self.on_transcript_update(self.transcript)
+            else:
+                logger.warning(f"Transcription event has no text. Event: {event}")
 
         elif event.type == ServerEventType.RESPONSE_DONE:
             logger.info("Response complete")
@@ -445,6 +489,12 @@ class VoiceLiveInterview:
         elif event.type == ServerEventType.ERROR:
             logger.error(f"VoiceLive error: {event.error.message}")
             print(f"\n[Error]: {event.error.message}")
+
+        else:
+            # Log unhandled events that might contain useful data
+            event_name = str(event.type).split('.')[-1] if hasattr(event.type, '__str__') else str(event.type)
+            if 'INPUT' in event_name.upper() or 'TRANSCRIPT' in event_name.upper() or 'SPEECH' in event_name.upper():
+                logger.info(f"Unhandled speech-related event: {event.type}, attrs: {dir(event)}")
 
     async def stop(self):
         """Stop the interview immediately."""
