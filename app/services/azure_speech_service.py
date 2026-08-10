@@ -22,9 +22,6 @@ class AzureSpeechService:
         if not self.endpoint:
             raise Exception("Azure Speech endpoint not configured. Set AZURE_SPEECH_ENDPOINT.")
 
-        # Extract region from endpoint (e.g., https://swedencentral.api.cognitive.microsoft.com/)
-        self.region = self._extract_region_from_endpoint(self.endpoint)
-
         # Get token using DefaultAzureCredential
         self.credential = DefaultAzureCredential()
 
@@ -32,25 +29,14 @@ class AzureSpeechService:
         self.voice_name = "en-US-GuyNeural"  # Male voice, similar to "echo"
         self.speech_rate = "+0%"
 
-    def _extract_region_from_endpoint(self, endpoint: str) -> str:
-        """Extract region from endpoint URL."""
-        # https://swedencentral.api.cognitive.microsoft.com/ -> swedencentral
-        endpoint = endpoint.rstrip("/")
-        if "api.cognitive.microsoft.com" in endpoint:
-            parts = endpoint.replace("https://", "").split(".")
-            return parts[0]
-        raise ValueError(f"Could not extract region from endpoint: {endpoint}")
-
     def _get_speech_config(self) -> speechsdk.SpeechConfig:
-        """Get speech config with AAD token authentication."""
+        """Get speech config with AAD token authentication using endpoint directly."""
         # Get access token
         token = self.credential.get_token("https://cognitiveservices.azure.com/.default")
 
-        # Create speech config with authorization token
-        speech_config = speechsdk.SpeechConfig(
-            auth_token=f"aad#{self.endpoint}#{token.token}",
-            region=self.region
-        )
+        # Create speech config from endpoint with authorization token
+        speech_config = speechsdk.SpeechConfig(endpoint=self.endpoint)
+        speech_config.authorization_token = f"aad#{self.endpoint}#{token.token}"
         return speech_config
 
     def text_to_speech(self, text: str) -> str:
