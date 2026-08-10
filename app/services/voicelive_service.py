@@ -264,10 +264,29 @@ class VoiceLiveInterview:
         self.transcript: list[dict] = []
         self.current_ai_response = ""
         self.candidate_responses = 0
+        self.should_end = False
 
     def get_instructions(self) -> str:
         """Get the system instructions from InterviewEngine."""
         return self.interview_engine.get_system_prompt()
+
+    def _check_if_interview_ending(self, ai_response: str) -> bool:
+        """Use LLM to check if the AI's response indicates interview is ending."""
+        from app.services.azure_openai import azure_openai_service
+
+        try:
+            result = azure_openai_service.chat_completion(
+                messages=[
+                    {"role": "system", "content": "You analyze interview transcripts. Reply only 'YES' or 'NO'."},
+                    {"role": "user", "content": f"Does this interviewer response indicate the interview is ending/wrapping up (saying goodbye, mentioning next steps, thanking for time, etc.)?\n\nResponse: \"{ai_response}\""},
+                ],
+                temperature=0,
+                max_tokens=5,
+            )
+            return "YES" in result.upper()
+        except Exception as e:
+            logger.error(f"Error checking interview end: {e}")
+            return False
 
     async def start(self):
         """Start the VoiceLive interview session."""
@@ -308,7 +327,13 @@ class VoiceLiveInterview:
 
                 # Configure session with same instructions as InterviewEngine
                 voice_config = AzureStandardVoice(name=self.voice, type="azure-standard")
-                turn_detection = ServerVad(threshold=0.5, prefix_padding_ms=300, silence_duration_ms=500)
+                # VAD settings - higher threshold = less sensitive to background noise
+                # Longer silence_duration = waits longer before ending turn
+                turn_detection = ServerVad(
+                    threshold=0.8,  # Less sensitive (0.5 was too sensitive)
+                    prefix_padding_ms=500,  # Buffer before speech
+                    silence_duration_ms=1000,  # Wait 1 second of silence before ending turn
+                )
 
                 session_config = RequestSession(
                     modalities=[Modality.TEXT, Modality.AUDIO],
@@ -386,6 +411,12 @@ class VoiceLiveInterview:
                 })
                 if self.on_transcript_update:
                     self.on_transcript_update(self.transcript)
+
+                # Check if interview should end based on AI's response
+                if self._check_if_interview_ending(self.current_ai_response):
+                    logger.info("Interview ending detected from AI response")
+                    self.should_end = True
+
                 self.current_ai_response = ""
                 print()
 
@@ -403,9 +434,10 @@ class VoiceLiveInterview:
 
         elif event.type == ServerEventType.RESPONSE_DONE:
             logger.info("Response complete")
-            # Check if interview should end (after ~15 exchanges)
-            if self.candidate_responses >= 15:
-                logger.info("Interview complete - max exchanges reached")
+            # Check if interview should end
+            if self.should_end or self.candidate_responses >= 15:
+                reason = "closing detected" if self.should_end else "max exchanges"
+                logger.info(f"Interview complete - {reason}")
                 self.is_running = False
                 if self.on_interview_complete:
                     self.on_interview_complete(self.transcript)
@@ -415,10 +447,25 @@ class VoiceLiveInterview:
             print(f"\n[Error]: {event.error.message}")
 
     async def stop(self):
-        """Stop the interview."""
+        """Stop the interview immediately."""
+        logger.info("Stopping interview...")
         self.is_running = False
+        self.should_end = True
+
+        # Stop audio immediately without waiting
         if self.audio_processor:
-            await self.audio_processor.cleanup()
+            self.audio_processor.is_capturing = False
+            self.audio_processor.is_playing = False
+            # Don't await cleanup - let it happen in background
+            try:
+                if self.audio_processor.input_stream:
+                    self.audio_processor.input_stream.stop_stream()
+                if self.audio_processor.output_stream:
+                    self.audio_processor.output_stream.stop_stream()
+            except:
+                pass
+
+        logger.info("Interview stopped")
 
     def get_transcript(self) -> list[dict]:
         """Get the conversation transcript."""
@@ -426,10 +473,33 @@ class VoiceLiveInterview:
 
     def generate_evaluation(self) -> dict:
         """Generate evaluation using InterviewEngine's logic."""
-        # Transfer transcript to interview engine
-        self.interview_engine.conversation_history = self.transcript
+        if not self.transcript:
+            return {
+                "overall_score": 0,
+                "communication_score": 0,
+                "technical_score": 0,
+                "culture_fit_score": 0,
+                "enthusiasm_score": 0,
+                "recommendation": "reject",
+                "summary": "No conversation recorded.",
+                "strengths": [],
+                "concerns": ["No transcript available"],
+                "key_highlights": [],
+                "suggested_l2_questions": [],
+                "incomplete": True,
+            }
+
+        # Transfer transcript to interview engine (convert roles if needed)
+        self.interview_engine.conversation_history = [
+            {
+                "role": "assistant" if t["role"] in ["ai", "assistant"] else "user",
+                "content": t["content"],
+                "timestamp": t.get("timestamp", ""),
+            }
+            for t in self.transcript
+        ]
         self.interview_engine.candidate_responses = [
-            t["content"] for t in self.transcript if t["role"] == "user"
+            t["content"] for t in self.transcript if t["role"] in ["user", "candidate"]
         ]
         return self.interview_engine.generate_evaluation()
 

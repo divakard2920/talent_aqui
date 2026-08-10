@@ -261,23 +261,54 @@ async def start_voicelive_interview(
     async def run_voicelive():
         try:
             await voicelive.start()
+        except Exception as e:
+            print(f"[VoiceLive] Error during interview: {e}")
         finally:
             # Save results
-            async with async_session() as session:
-                result = await session.execute(
-                    select(Interview).where(Interview.id == interview_id)
-                )
-                interview = result.scalar_one_or_none()
-                if interview:
-                    interview.status = InterviewStatus.COMPLETED.value
-                    interview.completed_at = datetime.utcnow()
-                    if interview.started_at:
-                        interview.duration_minutes = int(
-                            (datetime.utcnow() - interview.started_at).total_seconds() / 60
-                        )
-                    interview.transcript = voicelive.get_transcript()
-                    interview.evaluation = voicelive.generate_evaluation()
-                    await session.commit()
+            try:
+                transcript = voicelive.get_transcript()
+                print(f"[VoiceLive] Saving results. Transcript entries: {len(transcript)}")
+
+                # Generate evaluation
+                try:
+                    evaluation = voicelive.generate_evaluation()
+                except Exception as e:
+                    print(f"[VoiceLive] Error generating evaluation: {e}")
+                    evaluation = {
+                        "overall_score": 0,
+                        "communication_score": 0,
+                        "technical_score": 0,
+                        "culture_fit_score": 0,
+                        "enthusiasm_score": 0,
+                        "recommendation": "hold",
+                        "summary": f"Evaluation could not be generated: {str(e)}",
+                        "strengths": [],
+                        "concerns": ["Evaluation failed"],
+                        "key_highlights": [],
+                        "suggested_l2_questions": [],
+                        "incomplete": True,
+                    }
+
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(Interview).where(Interview.id == interview_id)
+                    )
+                    interview_record = result.scalar_one_or_none()
+                    if interview_record:
+                        interview_record.status = InterviewStatus.COMPLETED.value
+                        interview_record.completed_at = datetime.utcnow()
+                        if interview_record.started_at:
+                            interview_record.duration_minutes = int(
+                                (datetime.utcnow() - interview_record.started_at).total_seconds() / 60
+                            )
+                        interview_record.transcript = transcript
+                        interview_record.evaluation = evaluation
+                        await session.commit()
+                        print(f"[VoiceLive] Results saved for interview {interview_id}")
+                    else:
+                        print(f"[VoiceLive] Interview {interview_id} not found in database")
+            except Exception as e:
+                print(f"[VoiceLive] Error saving results: {e}")
 
             # Cleanup
             if interview_id in voicelive_sessions:
@@ -295,14 +326,56 @@ async def start_voicelive_interview(
 
 @router.post("/{interview_id}/stop-voicelive")
 async def stop_voicelive_interview(interview_id: int, db: AsyncSession = Depends(get_db)):
-    """Stop a running VoiceLive interview."""
+    """Stop a running VoiceLive interview and save results."""
     if interview_id not in voicelive_sessions:
         raise HTTPException(status_code=404, detail="No active VoiceLive session")
 
     voicelive = voicelive_sessions[interview_id]
+
+    # Stop immediately (non-blocking)
     await voicelive.stop()
 
-    return {"status": "stopping", "message": "Interview ending..."}
+    # Get transcript that we have so far
+    transcript = voicelive.get_transcript()
+
+    # Update database immediately with what we have
+    result = await db.execute(
+        select(Interview).where(Interview.id == interview_id)
+    )
+    interview = result.scalar_one_or_none()
+    if interview:
+        interview.status = InterviewStatus.COMPLETED.value
+        interview.completed_at = datetime.utcnow()
+        if interview.started_at:
+            interview.duration_minutes = int(
+                (datetime.utcnow() - interview.started_at).total_seconds() / 60
+            )
+        interview.transcript = transcript
+        await db.commit()
+
+    # Cleanup session
+    if interview_id in voicelive_sessions:
+        del voicelive_sessions[interview_id]
+
+    # Generate evaluation in background
+    async def generate_eval():
+        try:
+            evaluation = voicelive.generate_evaluation()
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Interview).where(Interview.id == interview_id)
+                )
+                interview_record = result.scalar_one_or_none()
+                if interview_record:
+                    interview_record.evaluation = evaluation
+                    await session.commit()
+        except Exception as e:
+            print(f"[VoiceLive] Error generating evaluation: {e}")
+
+    import asyncio
+    asyncio.create_task(generate_eval())
+
+    return {"status": "completed", "message": "Interview stopped. Evaluation generating..."}
 
 
 @router.post("/{interview_id}/start")
