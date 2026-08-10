@@ -4,6 +4,9 @@ python-multipart==0.0.9
 pdfplumber==0.11.0
 openai>=1.35.0
 azure-identity>=1.15.0
+azure-cognitiveservices-speech>=1.35.0
+azure-ai-voicelive>=0.1.0
+pyaudio>=0.2.14
 pydantic==2.7.4
 pydantic-settings==2.3.4
 sqlalchemy==2.0.31

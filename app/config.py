@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     use_azure_speech_service: bool = False
     azure_speech_endpoint: str | None = None  # e.g., https://swedencentral.api.cognitive.microsoft.com/
 
+    # Azure VoiceLive (real-time streaming voice - most natural)
+    # Set USE_VOICELIVE=true for real-time streaming interviews
+    use_voicelive: bool = False
+    voicelive_model: str = "gpt-4o-realtime-preview"
+    voicelive_voice: str = "en-US-AvaNeural"
+
     class Config:
         env_file = ".env"
 

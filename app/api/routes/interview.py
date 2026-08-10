@@ -3,11 +3,11 @@ Interview API Routes - Handles AI voice interview endpoints.
 """
 
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.models.database import get_db
+from app.models.database import get_db, async_session
 from app.models.candidate import Candidate
 from app.models.job import Job
 from app.models.interview import Interview, InterviewStatus
@@ -30,7 +30,7 @@ active_sessions: dict[int, InterviewEngine] = {}
 @router.get("/config")
 async def get_interview_config():
     """
-    Get interview configuration including whether server-side mic is available.
+    Get interview configuration including available modes.
     """
     from app.config import get_settings
     settings = get_settings()
@@ -38,7 +38,13 @@ async def get_interview_config():
     return {
         "server_mic_available": settings.use_azure_speech_service,
         "speech_service": "azure_speech" if settings.use_azure_speech_service else "openai",
+        "voicelive_available": settings.use_voicelive,
+        "mode": "voicelive" if settings.use_voicelive else ("azure_speech" if settings.use_azure_speech_service else "openai"),
     }
+
+
+# Store active VoiceLive sessions
+voicelive_sessions: dict[int, "VoiceLiveInterview"] = {}
 
 
 @router.post("/", response_model=InterviewResponse)
@@ -161,6 +167,142 @@ async def get_interview(interview_id: int, db: AsyncSession = Depends(get_db)):
     if not interview:
         raise HTTPException(status_code=404, detail="Interview not found")
     return interview
+
+
+@router.post("/{interview_id}/start-voicelive")
+async def start_voicelive_interview(
+    interview_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Start a VoiceLive real-time streaming interview.
+
+    Uses server microphone and speakers for natural conversation.
+    Interview runs in background - poll /interviews/{id} for status.
+    """
+    from app.config import get_settings
+    from app.services.voicelive_service import VoiceLiveInterview, check_audio_devices
+
+    settings = get_settings()
+
+    if not settings.use_voicelive:
+        raise HTTPException(status_code=400, detail="VoiceLive not enabled. Set USE_VOICELIVE=true")
+
+    # Check audio devices
+    audio_check = check_audio_devices()
+    if not audio_check.get("available"):
+        raise HTTPException(status_code=400, detail=f"Audio not available: {audio_check.get('error')}")
+
+    # Get interview
+    result = await db.execute(
+        select(Interview).where(Interview.id == interview_id)
+    )
+    interview = result.scalar_one_or_none()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    if interview.status not in [InterviewStatus.SCHEDULED.value, InterviewStatus.IN_PROGRESS.value]:
+        raise HTTPException(status_code=400, detail=f"Interview cannot be started (status: {interview.status})")
+
+    # Check if already running
+    if interview_id in voicelive_sessions:
+        raise HTTPException(status_code=400, detail="Interview already in progress")
+
+    # Get candidate and job
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == interview.candidate_id)
+    )
+    candidate = result.scalar_one_or_none()
+
+    result = await db.execute(select(Job).where(Job.id == interview.job_id))
+    job = result.scalar_one_or_none()
+
+    candidate_context = {
+        "name": candidate.name,
+        "email": candidate.email,
+        "location": candidate.location,
+        **(candidate.parsed_data or {}),
+    }
+
+    job_context = {
+        "title": job.title,
+        "department": job.department,
+        "description": job.description,
+        "requirements": job.requirements,
+        "skills_required": job.skills_required or [],
+        "skills_preferred": job.skills_preferred or [],
+        "experience_min_years": job.experience_min_years,
+        "experience_max_years": job.experience_max_years,
+        "location": job.location,
+    }
+
+    # Update status
+    interview.status = InterviewStatus.IN_PROGRESS.value
+    interview.started_at = datetime.utcnow()
+    interview.interview_config = {
+        "mode": "voicelive",
+        "job_title": job.title,
+        "candidate_name": candidate.name,
+        "started_at": datetime.utcnow().isoformat(),
+    }
+    await db.commit()
+
+    # Create VoiceLive session
+    voicelive = VoiceLiveInterview(
+        job_context=job_context,
+        candidate_context=candidate_context,
+        company_name="Knorr-Bremse",
+    )
+    voicelive_sessions[interview_id] = voicelive
+
+    # Run in background
+    import asyncio
+
+    async def run_voicelive():
+        try:
+            await voicelive.start()
+        finally:
+            # Save results
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Interview).where(Interview.id == interview_id)
+                )
+                interview = result.scalar_one_or_none()
+                if interview:
+                    interview.status = InterviewStatus.COMPLETED.value
+                    interview.completed_at = datetime.utcnow()
+                    if interview.started_at:
+                        interview.duration_minutes = int(
+                            (datetime.utcnow() - interview.started_at).total_seconds() / 60
+                        )
+                    interview.transcript = voicelive.get_transcript()
+                    interview.evaluation = voicelive.generate_evaluation()
+                    await session.commit()
+
+            # Cleanup
+            if interview_id in voicelive_sessions:
+                del voicelive_sessions[interview_id]
+
+    asyncio.create_task(run_voicelive())
+
+    return {
+        "interview_id": interview_id,
+        "status": "in_progress",
+        "mode": "voicelive",
+        "message": "VoiceLive interview started. Speak into server microphone.",
+    }
+
+
+@router.post("/{interview_id}/stop-voicelive")
+async def stop_voicelive_interview(interview_id: int, db: AsyncSession = Depends(get_db)):
+    """Stop a running VoiceLive interview."""
+    if interview_id not in voicelive_sessions:
+        raise HTTPException(status_code=404, detail="No active VoiceLive session")
+
+    voicelive = voicelive_sessions[interview_id]
+    await voicelive.stop()
+
+    return {"status": "stopping", "message": "Interview ending..."}
 
 
 @router.post("/{interview_id}/start")
