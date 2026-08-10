@@ -378,7 +378,7 @@ class VoiceLiveInterview:
     async def _handle_event(self, event, connection, ServerEventType):
         """Handle VoiceLive events."""
         # Log all event types for debugging
-        logger.debug(f"Event received: {event.type}")
+        logger.info(f"Event received: {event.type}")
 
         if event.type == ServerEventType.SESSION_UPDATED:
             logger.info(f"Session ready: {event.session.id}")
@@ -398,14 +398,21 @@ class VoiceLiveInterview:
             await self.audio_processor.start_playback()
 
         elif event.type == ServerEventType.CONVERSATION_ITEM_CREATED:
+            # Log full event structure for debugging
+            logger.info(f"CONVERSATION_ITEM_CREATED event: {event}")
+
             # Check if this contains user input with transcription
             if hasattr(event, 'item') and event.item:
                 item = event.item
+                logger.info(f"Item attributes: {dir(item)}, role: {getattr(item, 'role', 'NO_ROLE')}")
+
                 if hasattr(item, 'role') and item.role == 'user':
                     # Try to get content
                     content_text = None
                     if hasattr(item, 'content') and item.content:
+                        logger.info(f"Content: {item.content}")
                         for part in item.content:
+                            logger.info(f"Part attributes: {dir(part)}")
                             if hasattr(part, 'transcript') and part.transcript:
                                 content_text = part.transcript
                             elif hasattr(part, 'text') and part.text:
@@ -421,6 +428,8 @@ class VoiceLiveInterview:
                         self.candidate_responses += 1
                         if self.on_transcript_update:
                             self.on_transcript_update(self.transcript)
+                    else:
+                        logger.warning(f"User item has no content text")
 
         elif event.type == ServerEventType.RESPONSE_AUDIO_DELTA:
             await self.audio_processor.queue_audio(event.delta)
