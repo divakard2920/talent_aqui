@@ -17,25 +17,59 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
   const [serverMicAvailable, setServerMicAvailable] = useState(false); // Server-side mic via Azure Speech
   const [useServerMic, setUseServerMic] = useState(false); // Using server mic instead of browser mic
   const [isListening, setIsListening] = useState(false); // Server mic listening state
+  const [voiceLiveAvailable, setVoiceLiveAvailable] = useState(false); // VoiceLive real-time streaming
+  const [voiceLiveMode, setVoiceLiveMode] = useState(false); // Currently using VoiceLive
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioContextRef = useRef(null);
   const streamRef = useRef(null);
   const textInputRef = useRef(null);
+  const pollingRef = useRef(null);
 
-  // Fetch config on mount to check if server mic is available
+  // Fetch config on mount to check available modes
   useEffect(() => {
     const fetchConfig = async () => {
       try {
         const res = await interviewApi.getConfig();
         setServerMicAvailable(res.data.server_mic_available);
+        setVoiceLiveAvailable(res.data.voicelive_available);
       } catch (err) {
         console.log('Could not fetch interview config:', err.message);
       }
     };
     fetchConfig();
   }, []);
+
+  // Poll for transcript updates in VoiceLive mode
+  useEffect(() => {
+    if (voiceLiveMode && status === 'active') {
+      pollingRef.current = setInterval(async () => {
+        try {
+          const res = await interviewApi.get(interview.id);
+          if (res.data.transcript && res.data.transcript.length > 0) {
+            setTranscript(res.data.transcript.map(t => ({
+              role: t.role === 'assistant' ? 'ai' : 'candidate',
+              content: t.content,
+              timestamp: t.timestamp,
+            })));
+          }
+          if (res.data.status === 'completed') {
+            setStatus('completed');
+            setEvaluation(res.data.evaluation);
+            onComplete?.(res.data);
+            clearInterval(pollingRef.current);
+          }
+        } catch (err) {
+          console.log('Polling error:', err.message);
+        }
+      }, 2000);
+
+      return () => {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+      };
+    }
+  }, [voiceLiveMode, status, interview.id, onComplete]);
 
   // Prevent browser refresh/close during active interview
   useEffect(() => {
@@ -91,6 +125,22 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
     setStatus('starting');
     setError(null);
 
+    // Use VoiceLive if available (real-time streaming)
+    if (voiceLiveAvailable) {
+      try {
+        await interviewApi.startVoiceLive(interview.id);
+        setVoiceLiveMode(true);
+        setStatus('active');
+        // Transcript will be updated via polling
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Failed to start VoiceLive interview');
+        setStatus('ready');
+        exitFullscreen();
+      }
+      return;
+    }
+
+    // Standard interview mode
     try {
       const res = await interviewApi.start(interview.id);
 
@@ -111,6 +161,16 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
       setError(err.response?.data?.detail || 'Failed to start interview');
       setStatus('ready');
       exitFullscreen(); // Exit fullscreen if start failed
+    }
+  };
+
+  // Stop VoiceLive interview
+  const stopVoiceLive = async () => {
+    try {
+      await interviewApi.stopVoiceLive(interview.id);
+      // Polling will detect completion
+    } catch (err) {
+      setError('Failed to stop interview');
     }
   };
 
@@ -525,9 +585,10 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
             borderRadius: '20px',
             fontSize: '0.85rem',
           }}>
-            {status === 'ready' && 'Ready to Connect'}
+            {status === 'ready' && (voiceLiveAvailable ? 'Ready (VoiceLive)' : 'Ready to Connect')}
             {status === 'starting' && 'Connecting...'}
-            {status === 'active' && (isRecording ? 'Recording...' : isListening ? 'Listening (Server)...' : isSpeaking ? `${INTERVIEWER_NAME} is speaking...` : 'Your turn')}
+            {status === 'active' && voiceLiveMode && 'Live Conversation'}
+            {status === 'active' && !voiceLiveMode && (isRecording ? 'Recording...' : isListening ? 'Listening (Server)...' : isSpeaking ? `${INTERVIEWER_NAME} is speaking...` : 'Your turn')}
             {status === 'processing' && 'Processing...'}
             {status === 'completed' && 'Call Ended'}
           </div>
@@ -560,6 +621,14 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
               margin: '0 auto 16px',
             }}>{INTERVIEWER_NAME.charAt(0)}</div>
             <p>Click "Start Call" to connect with {INTERVIEWER_NAME} for your screening.</p>
+          </div>
+        )}
+
+        {transcript.length === 0 && status === 'active' && voiceLiveMode && (
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+            <Loader2 size={32} className="spin" style={{ margin: '0 auto 16px' }} />
+            <p>{INTERVIEWER_NAME} is about to greet you...</p>
+            <p style={{ fontSize: '0.85rem' }}>Speak naturally - the conversation will appear here.</p>
           </div>
         )}
 
@@ -642,8 +711,8 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
         background: 'white',
         borderTop: '1px solid var(--border-light)',
       }}>
-        {/* Mode toggle */}
-        {status === 'active' && !isSpeaking && !isListening && (
+        {/* Mode toggle - hide in VoiceLive mode */}
+        {status === 'active' && !isSpeaking && !isListening && !voiceLiveMode && (
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
             <button
               onClick={() => { setUseTextMode(false); setUseServerMic(false); }}
@@ -699,11 +768,27 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
         <div style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
           {status === 'ready' && (
             <button className="btn-sarvam" onClick={startInterview}>
-              <Phone size={18} /> Start Call
+              <Phone size={18} /> Start Call {voiceLiveAvailable && '(VoiceLive)'}
             </button>
           )}
 
-          {status === 'active' && !isSpeaking && !useTextMode && !useServerMic && (
+          {/* VoiceLive mode - real-time streaming, no manual controls needed */}
+          {status === 'active' && voiceLiveMode && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#287A4F' }}>
+                <Volume2 size={24} className="pulse" />
+                <span style={{ fontWeight: 500 }}>Live Conversation in Progress</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                Speak naturally into the microphone. The conversation flows automatically.
+              </p>
+              <button className="btn-pill" onClick={stopVoiceLive} style={{ marginTop: '8px' }}>
+                <PhoneOff size={18} /> End Call
+              </button>
+            </div>
+          )}
+
+          {status === 'active' && !isSpeaking && !useTextMode && !useServerMic && !voiceLiveMode && (
             <>
               {!isRecording ? (
                 <button

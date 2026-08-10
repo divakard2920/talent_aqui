@@ -77,6 +77,8 @@ export const interviewApi = {
   create: (candidateId, jobId, scheduledAt = null) =>
     api.post('/interviews/', { candidate_id: candidateId, job_id: jobId, scheduled_at: scheduledAt }),
   start: (id) => api.post(`/interviews/${id}/start`),
+  startVoiceLive: (id) => api.post(`/interviews/${id}/start-voicelive`),
+  stopVoiceLive: (id) => api.post(`/interviews/${id}/stop-voicelive`),
   respond: (id, audioBase64) =>
     api.post(`/interviews/${id}/respond`, { interview_id: id, audio_base64: audioBase64 }),
   respondMic: (id) => api.post(`/interviews/${id}/respond-mic`),
