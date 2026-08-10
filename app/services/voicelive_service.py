@@ -1,0 +1,463 @@
+"""
+VoiceLive Interview Service - Real-time streaming voice interviews using Azure VoiceLive SDK.
+
+Provides natural, human-like voice conversations with:
+- Continuous audio streaming (no click-to-speak)
+- Automatic voice activity detection (VAD)
+- Real-time AI responses
+- Interrupt handling (candidate can interrupt AI)
+"""
+
+import asyncio
+import base64
+import queue
+import threading
+import logging
+from typing import Optional, Callable
+from datetime import datetime
+
+try:
+    import pyaudio
+    PYAUDIO_AVAILABLE = True
+except ImportError:
+    PYAUDIO_AVAILABLE = False
+    pyaudio = None
+
+from azure.identity import DefaultAzureCredential
+
+from app.config import get_settings
+from app.services.interview_engine import InterviewEngine
+
+settings = get_settings()
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+
+class AudioProcessor:
+    """Handles real-time audio capture and playback."""
+
+    def __init__(self, connection):
+        self.connection = connection
+        self.audio = pyaudio.PyAudio() if PYAUDIO_AVAILABLE else None
+
+        self.format = pyaudio.paInt16 if PYAUDIO_AVAILABLE else None
+        self.channels = 1
+        self.rate = 24000
+        self.chunk_size = 1024
+
+        self.is_capturing = False
+        self.is_playing = False
+        self.input_stream = None
+        self.output_stream = None
+
+        self.audio_queue: "queue.Queue[bytes]" = queue.Queue()
+        self.audio_send_queue: "queue.Queue[str]" = queue.Queue()
+        self.capture_thread: Optional[threading.Thread] = None
+        self.playback_thread: Optional[threading.Thread] = None
+        self.send_thread: Optional[threading.Thread] = None
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
+
+    async def start_capture(self):
+        if not PYAUDIO_AVAILABLE:
+            raise Exception("PyAudio not installed. Run: pip install pyaudio")
+
+        if self.is_capturing:
+            return
+
+        self.loop = asyncio.get_event_loop()
+        self.is_capturing = True
+
+        try:
+            self.input_stream = self.audio.open(
+                format=self.format,
+                channels=self.channels,
+                rate=self.rate,
+                input=True,
+                frames_per_buffer=self.chunk_size,
+            )
+            self.input_stream.start_stream()
+
+            self.capture_thread = threading.Thread(target=self._capture_audio_thread)
+            self.capture_thread.daemon = True
+            self.capture_thread.start()
+
+            self.send_thread = threading.Thread(target=self._send_audio_thread)
+            self.send_thread.daemon = True
+            self.send_thread.start()
+
+            logger.info("Started audio capture")
+
+        except Exception as e:
+            logger.error(f"Failed to start audio capture: {e}")
+            self.is_capturing = False
+            raise
+
+    def _capture_audio_thread(self):
+        while self.is_capturing and self.input_stream:
+            try:
+                audio_data = self.input_stream.read(self.chunk_size, exception_on_overflow=False)
+                if audio_data and self.is_capturing:
+                    audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+                    self.audio_send_queue.put(audio_base64)
+            except Exception as e:
+                if self.is_capturing:
+                    logger.error(f"Error in audio capture: {e}")
+                break
+
+    def _send_audio_thread(self):
+        while self.is_capturing:
+            try:
+                audio_base64 = self.audio_send_queue.get(timeout=0.1)
+                if audio_base64 and self.is_capturing and self.loop:
+                    asyncio.run_coroutine_threadsafe(
+                        self.connection.input_audio_buffer.append(audio=audio_base64),
+                        self.loop
+                    )
+            except queue.Empty:
+                continue
+            except Exception as e:
+                if self.is_capturing:
+                    logger.error(f"Error sending audio: {e}")
+                break
+
+    async def stop_capture(self):
+        if not self.is_capturing:
+            return
+
+        self.is_capturing = False
+
+        if self.input_stream:
+            self.input_stream.stop_stream()
+            self.input_stream.close()
+            self.input_stream = None
+
+        if self.capture_thread:
+            self.capture_thread.join(timeout=1.0)
+        if self.send_thread:
+            self.send_thread.join(timeout=1.0)
+
+        while not self.audio_send_queue.empty():
+            try:
+                self.audio_send_queue.get_nowait()
+            except queue.Empty:
+                break
+
+        logger.info("Stopped audio capture")
+
+    async def start_playback(self):
+        if not PYAUDIO_AVAILABLE:
+            raise Exception("PyAudio not installed")
+
+        if self.is_playing:
+            return
+
+        self.is_playing = True
+
+        try:
+            self.output_stream = self.audio.open(
+                format=self.format,
+                channels=self.channels,
+                rate=self.rate,
+                output=True,
+                frames_per_buffer=self.chunk_size,
+            )
+
+            self.playback_thread = threading.Thread(target=self._playback_audio_thread)
+            self.playback_thread.daemon = True
+            self.playback_thread.start()
+
+            logger.info("Audio playback ready")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize playback: {e}")
+            self.is_playing = False
+            raise
+
+    def _playback_audio_thread(self):
+        while self.is_playing:
+            try:
+                audio_data = self.audio_queue.get(timeout=0.1)
+                if audio_data and self.output_stream and self.is_playing:
+                    self.output_stream.write(audio_data)
+            except queue.Empty:
+                continue
+            except Exception as e:
+                if self.is_playing:
+                    logger.error(f"Error in playback: {e}")
+                break
+
+    async def queue_audio(self, audio_data: bytes):
+        if self.is_playing:
+            self.audio_queue.put(audio_data)
+
+    async def stop_playback(self):
+        if not self.is_playing:
+            return
+
+        self.is_playing = False
+
+        while not self.audio_queue.empty():
+            try:
+                self.audio_queue.get_nowait()
+            except queue.Empty:
+                break
+
+        if self.output_stream:
+            self.output_stream.stop_stream()
+            self.output_stream.close()
+            self.output_stream = None
+
+        if self.playback_thread:
+            self.playback_thread.join(timeout=1.0)
+
+        logger.info("Stopped playback")
+
+    async def cleanup(self):
+        await self.stop_capture()
+        await self.stop_playback()
+        if self.audio:
+            self.audio.terminate()
+        logger.info("Audio processor cleaned up")
+
+
+class VoiceLiveInterview:
+    """
+    Real-time voice interview using Azure VoiceLive SDK.
+    Uses the same system prompt as InterviewEngine for consistency.
+    """
+
+    def __init__(
+        self,
+        job_context: dict,
+        candidate_context: dict,
+        company_name: str = "Knorr-Bremse",
+        on_transcript_update: Optional[Callable] = None,
+        on_interview_complete: Optional[Callable] = None,
+    ):
+        self.job_context = job_context
+        self.candidate_context = candidate_context
+        self.company_name = company_name
+        self.on_transcript_update = on_transcript_update
+        self.on_interview_complete = on_interview_complete
+
+        # Use InterviewEngine to get the same system prompt
+        self.interview_engine = InterviewEngine()
+        self.interview_engine.initialize(
+            job=job_context,
+            candidate=candidate_context,
+            company_name=company_name,
+        )
+
+        # VoiceLive endpoint (same as OpenAI endpoint but WebSocket)
+        self.endpoint = settings.azure_openai_endpoint.rstrip("/")
+        # Convert to WebSocket URL for realtime API
+        self.endpoint = self.endpoint.replace("https://", "wss://").replace("http://", "ws://")
+        self.endpoint += "/openai/realtime"
+
+        self.model = "gpt-4o-realtime-preview"
+        self.voice = "en-US-AvaNeural"
+
+        # State
+        self.connection = None
+        self.audio_processor: Optional[AudioProcessor] = None
+        self.is_running = False
+        self.transcript: list[dict] = []
+        self.current_ai_response = ""
+        self.candidate_responses = 0
+
+    def get_instructions(self) -> str:
+        """Get the system instructions from InterviewEngine."""
+        return self.interview_engine.get_system_prompt()
+
+    async def start(self):
+        """Start the VoiceLive interview session."""
+        try:
+            from azure.ai.voicelive.aio import connect
+            from azure.ai.voicelive.models import (
+                RequestSession,
+                ServerVad,
+                AzureStandardVoice,
+                Modality,
+                OutputAudioFormat,
+                ServerEventType,
+            )
+        except ImportError:
+            raise Exception("azure-ai-voicelive not installed. Run: pip install azure-ai-voicelive")
+
+        if not PYAUDIO_AVAILABLE:
+            raise Exception("pyaudio not installed. Run: pip install pyaudio")
+
+        self.is_running = True
+        credential = DefaultAzureCredential()
+
+        logger.info(f"Connecting to VoiceLive at {self.endpoint}")
+
+        try:
+            async with connect(
+                endpoint=self.endpoint,
+                credential=credential,
+                model=self.model,
+                connection_options={
+                    "max_msg_size": 10 * 1024 * 1024,
+                    "heartbeat": 20,
+                    "timeout": 20,
+                },
+            ) as connection:
+                self.connection = connection
+                self.audio_processor = AudioProcessor(connection)
+
+                # Configure session with same instructions as InterviewEngine
+                voice_config = AzureStandardVoice(name=self.voice, type="azure-standard")
+                turn_detection = ServerVad(threshold=0.5, prefix_padding_ms=300, silence_duration_ms=500)
+
+                session_config = RequestSession(
+                    modalities=[Modality.TEXT, Modality.AUDIO],
+                    instructions=self.get_instructions(),
+                    voice=voice_config,
+                    input_audio_format=OutputAudioFormat.PCM16,
+                    output_audio_format=OutputAudioFormat.PCM16,
+                    turn_detection=turn_detection,
+                )
+
+                await connection.session.update(session=session_config)
+                await self.audio_processor.start_playback()
+
+                logger.info("VoiceLive interview session ready")
+                print("\n" + "=" * 60)
+                print("INTERVIEW STARTED")
+                print(f"Candidate: {self.candidate_context.get('name', 'Unknown')}")
+                print(f"Position: {self.job_context.get('title', 'Unknown')}")
+                print("=" * 60 + "\n")
+
+                await self._process_events(connection, ServerEventType)
+
+        except Exception as e:
+            logger.error(f"VoiceLive connection error: {e}")
+            raise
+        finally:
+            if self.audio_processor:
+                await self.audio_processor.cleanup()
+            self.is_running = False
+
+    async def _process_events(self, connection, ServerEventType):
+        """Process VoiceLive events."""
+        try:
+            async for event in connection:
+                if not self.is_running:
+                    break
+                await self._handle_event(event, connection, ServerEventType)
+        except Exception as e:
+            logger.error(f"Event processing error: {e}")
+            raise
+
+    async def _handle_event(self, event, connection, ServerEventType):
+        """Handle VoiceLive events."""
+        if event.type == ServerEventType.SESSION_UPDATED:
+            logger.info(f"Session ready: {event.session.id}")
+            await self.audio_processor.start_capture()
+
+        elif event.type == ServerEventType.INPUT_AUDIO_BUFFER_SPEECH_STARTED:
+            logger.info("Candidate started speaking")
+            print("\n[Candidate speaking...]")
+            await self.audio_processor.stop_playback()
+            try:
+                await connection.response.cancel()
+            except:
+                pass
+
+        elif event.type == ServerEventType.INPUT_AUDIO_BUFFER_SPEECH_STOPPED:
+            logger.info("Candidate stopped speaking")
+            await self.audio_processor.start_playback()
+
+        elif event.type == ServerEventType.RESPONSE_AUDIO_DELTA:
+            await self.audio_processor.queue_audio(event.delta)
+
+        elif event.type == ServerEventType.RESPONSE_AUDIO_TRANSCRIPT_DELTA:
+            if hasattr(event, 'delta') and event.delta:
+                self.current_ai_response += event.delta
+                print(event.delta, end="", flush=True)
+
+        elif event.type == ServerEventType.RESPONSE_AUDIO_TRANSCRIPT_DONE:
+            if self.current_ai_response:
+                self.transcript.append({
+                    "role": "assistant",
+                    "content": self.current_ai_response,
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+                if self.on_transcript_update:
+                    self.on_transcript_update(self.transcript)
+                self.current_ai_response = ""
+                print()
+
+        elif event.type == ServerEventType.CONVERSATION_ITEM_INPUT_AUDIO_TRANSCRIPTION_COMPLETED:
+            if hasattr(event, 'transcript') and event.transcript:
+                print(f"\n[Candidate]: {event.transcript}")
+                self.transcript.append({
+                    "role": "user",
+                    "content": event.transcript,
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+                self.candidate_responses += 1
+                if self.on_transcript_update:
+                    self.on_transcript_update(self.transcript)
+
+        elif event.type == ServerEventType.RESPONSE_DONE:
+            logger.info("Response complete")
+            # Check if interview should end (after ~15 exchanges)
+            if self.candidate_responses >= 15:
+                logger.info("Interview complete - max exchanges reached")
+                self.is_running = False
+                if self.on_interview_complete:
+                    self.on_interview_complete(self.transcript)
+
+        elif event.type == ServerEventType.ERROR:
+            logger.error(f"VoiceLive error: {event.error.message}")
+            print(f"\n[Error]: {event.error.message}")
+
+    async def stop(self):
+        """Stop the interview."""
+        self.is_running = False
+        if self.audio_processor:
+            await self.audio_processor.cleanup()
+
+    def get_transcript(self) -> list[dict]:
+        """Get the conversation transcript."""
+        return self.transcript
+
+    def generate_evaluation(self) -> dict:
+        """Generate evaluation using InterviewEngine's logic."""
+        # Transfer transcript to interview engine
+        self.interview_engine.conversation_history = self.transcript
+        self.interview_engine.candidate_responses = [
+            t["content"] for t in self.transcript if t["role"] == "user"
+        ]
+        return self.interview_engine.generate_evaluation()
+
+
+def check_audio_devices() -> dict:
+    """Check available audio devices."""
+    if not PYAUDIO_AVAILABLE:
+        return {"available": False, "error": "PyAudio not installed"}
+
+    try:
+        p = pyaudio.PyAudio()
+        input_devices = []
+        output_devices = []
+
+        for i in range(p.get_device_count()):
+            info = p.get_device_info_by_index(i)
+            if info.get("maxInputChannels", 0) > 0:
+                input_devices.append(info.get("name"))
+            if info.get("maxOutputChannels", 0) > 0:
+                output_devices.append(info.get("name"))
+
+        p.terminate()
+
+        return {
+            "available": len(input_devices) > 0 and len(output_devices) > 0,
+            "input_devices": input_devices,
+            "output_devices": output_devices,
+        }
+    except Exception as e:
+        return {"available": False, "error": str(e)}
