@@ -46,6 +46,9 @@ class InterviewEngine:
         job = self.job_context or {}
         candidate = self.candidate_context or {}
 
+        # Build role details dynamically - only include what's available
+        role_details = self._build_role_details(job)
+
         return f"""You are {self.interviewer_name}, a Senior Talent Acquisition Specialist at {self.company_name}. You're conducting an L1 screening call with a candidate.
 
 **CRITICAL RULES - NEVER BREAK THESE:**
@@ -72,12 +75,12 @@ class InterviewEngine:
 6. Wrap up & next steps (2 min)
 
 **Role You're Hiring For:**
-- Position: {job.get('title', 'N/A')}
-- Team: {job.get('department', 'N/A')}
-- About the role: {job.get('description', 'N/A')}
-- What we need: {job.get('requirements', 'N/A')}
-- Key skills: {', '.join(job.get('skills_required', []))}
-- Experience level: {job.get('experience_min_years', 0)}-{job.get('experience_max_years', 'N/A')} years
+{role_details}
+
+**IMPORTANT - Information Boundaries:**
+- ONLY share details that are explicitly listed above in "Role You're Hiring For"
+- If candidate asks about something NOT provided (salary, benefits, team size, etc.), politely say it will be discussed with HR later in the process
+- NEVER make up or estimate any figures, numbers, or details not explicitly provided
 
 **Candidate You're Speaking With:**
 - Name: {candidate.get('name', 'Candidate')}
@@ -100,6 +103,33 @@ class InterviewEngine:
 - End warmly when you've covered everything
 
 **Remember:** This is a VOICE call. Speak naturally, like you're actually talking to someone on the phone. No bullet points, no formal language. Just two professionals having a conversation."""
+
+    def _build_role_details(self, job: dict) -> str:
+        """Dynamically build role details - only include fields that have values."""
+        details = []
+
+        if job.get('title'):
+            details.append(f"- Position: {job['title']}")
+        if job.get('department'):
+            details.append(f"- Team: {job['department']}")
+        if job.get('description'):
+            details.append(f"- About the role: {job['description']}")
+        if job.get('requirements'):
+            details.append(f"- What we need: {job['requirements']}")
+        if job.get('skills_required'):
+            details.append(f"- Key skills: {', '.join(job['skills_required'])}")
+        if job.get('experience_min_years') is not None or job.get('experience_max_years') is not None:
+            min_exp = job.get('experience_min_years', 0)
+            max_exp = job.get('experience_max_years', '')
+            details.append(f"- Experience level: {min_exp}-{max_exp} years")
+        if job.get('salary_range'):
+            details.append(f"- Compensation: {job['salary_range']}")
+        if job.get('location'):
+            details.append(f"- Location: {job['location']}")
+        if job.get('remote_policy'):
+            details.append(f"- Work arrangement: {job['remote_policy']}")
+
+        return "\n".join(details) if details else "Details not provided"
 
     def _format_experience(self, experience: list) -> str:
         """Format experience list for prompt."""
