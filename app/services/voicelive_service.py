@@ -271,14 +271,22 @@ class VoiceLiveInterview:
         return self.interview_engine.get_system_prompt()
 
     def _check_if_interview_ending(self, ai_response: str) -> bool:
-        """Use LLM to check if the AI's response indicates interview is ending."""
+        """Use LLM to check if the AI's response indicates interview has fully concluded."""
         from app.services.azure_openai import azure_openai_service
 
         try:
             result = azure_openai_service.chat_completion(
                 messages=[
                     {"role": "system", "content": "You analyze interview transcripts. Reply only 'YES' or 'NO'."},
-                    {"role": "user", "content": f"Does this interviewer response indicate the interview is ending/wrapping up (saying goodbye, mentioning next steps, thanking for time, etc.)?\n\nResponse: \"{ai_response}\""},
+                    {"role": "user", "content": f"""Is this the FINAL goodbye of the interview?
+
+IMPORTANT:
+- "Do you have any questions?" or "Before we wrap up..." is NOT the end - the candidate may still ask questions
+- Only return YES if this is the ACTUAL final farewell after all questions are done (e.g., "Thank you for your time, we'll be in touch. Goodbye!")
+
+Response: "{ai_response}"
+
+Is this the FINAL goodbye (not a transition to Q&A)?"""},
                 ],
                 temperature=0,
                 max_tokens=5,
@@ -342,6 +350,7 @@ class VoiceLiveInterview:
                     input_audio_format=OutputAudioFormat.PCM16,
                     output_audio_format=OutputAudioFormat.PCM16,
                     turn_detection=turn_detection,
+                    input_audio_transcription={"model": "whisper-1"},
                 )
 
                 await connection.session.update(session=session_config)
@@ -353,6 +362,9 @@ class VoiceLiveInterview:
                 print(f"Candidate: {self.candidate_context.get('name', 'Unknown')}")
                 print(f"Position: {self.job_context.get('title', 'Unknown')}")
                 print("=" * 60 + "\n")
+
+                # Trigger AI to start the conversation with a greeting
+                await connection.response.create()
 
                 await self._process_events(connection, ServerEventType)
 
@@ -513,10 +525,9 @@ class VoiceLiveInterview:
 
         elif event.type == ServerEventType.RESPONSE_DONE:
             logger.info("Response complete")
-            # Check if interview should end
-            if self.should_end or self.candidate_responses >= 15:
-                reason = "closing detected" if self.should_end else "max exchanges"
-                logger.info(f"Interview complete - {reason}")
+            # Check if interview should end (only when AI naturally concludes)
+            if self.should_end:
+                logger.info("Interview complete - AI concluded the interview")
                 self.is_running = False
                 if self.on_interview_complete:
                     self.on_interview_complete(self.transcript)
