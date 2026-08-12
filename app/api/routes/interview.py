@@ -40,6 +40,8 @@ async def get_interview_config():
         "speech_service": "azure_speech" if settings.use_azure_speech_service else "openai",
         "voicelive_available": settings.use_voicelive,
         "mode": "voicelive" if settings.use_voicelive else ("azure_speech" if settings.use_azure_speech_service else "openai"),
+        "interviewer_name": settings.interviewer_name,
+        "company_name": settings.company_name,
     }
 
 

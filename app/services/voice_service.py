@@ -36,7 +36,7 @@ class VoiceService:
             self._initialize_client()
 
         # Voice settings for natural conversation
-        self.voice = "echo"  # Male, warm voice for Devin. Options: alloy, echo, fable, onyx, nova, shimmer
+        self.voice = "echo"  # Warm voice for Sage. Options: alloy, echo, fable, onyx, nova, shimmer
         self.speed = 1.0
 
         # Azure deployment names (for OpenAI mode)

@@ -11,20 +11,22 @@ Handles:
 from datetime import datetime
 from typing import Optional
 from app.services.azure_openai import azure_openai_service
+from app.config import get_settings
 
 
 class InterviewEngine:
     """Manages AI-driven L1 interviews."""
 
     def __init__(self):
+        settings = get_settings()
         self.conversation_history = []
         self.questions_asked = []
         self.candidate_responses = []
         self.current_phase = "introduction"
         self.job_context = None
         self.candidate_context = None
-        self.company_name = "Our Company"  # Can be configured
-        self.interviewer_name = "Devin"  # Human interviewer persona
+        self.company_name = settings.company_name
+        self.interviewer_name = settings.interviewer_name
 
     def initialize(
         self,

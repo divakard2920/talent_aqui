@@ -2,8 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, Phone, PhoneOff, Loader2, Volume2, User, Send, MessageSquare } from 'lucide-react';
 import { interviewApi } from '../services/api';
 
-const INTERVIEWER_NAME = "Devin";
-
 export function InterviewRoom({ interview, candidate, job, onComplete, onClose }) {
   const [status, setStatus] = useState('ready'); // ready, starting, active, processing, completed
   const [isRecording, setIsRecording] = useState(false);
@@ -19,6 +17,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
   const [isListening, setIsListening] = useState(false); // Server mic listening state
   const [voiceLiveAvailable, setVoiceLiveAvailable] = useState(false); // VoiceLive real-time streaming
   const [voiceLiveMode, setVoiceLiveMode] = useState(false); // Currently using VoiceLive
+  const [interviewerName, setInterviewerName] = useState('Sage'); // Configurable interviewer name
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -34,6 +33,9 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
         const res = await interviewApi.getConfig();
         setServerMicAvailable(res.data.server_mic_available);
         setVoiceLiveAvailable(res.data.voicelive_available);
+        if (res.data.interviewer_name) {
+          setInterviewerName(res.data.interviewer_name);
+        }
       } catch (err) {
         console.log('Could not fetch interview config:', err.message);
       }
@@ -591,7 +593,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ margin: '0 0 4px', fontSize: '1.2rem' }}>Screening Call with {INTERVIEWER_NAME}</h3>
+            <h3 style={{ margin: '0 0 4px', fontSize: '1.2rem' }}>Screening Call with {interviewerName}</h3>
             <p style={{ margin: 0, opacity: 0.8, fontSize: '0.9rem' }}>
               {candidate?.name} • {job?.title}
             </p>
@@ -605,7 +607,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
             {status === 'ready' && (voiceLiveAvailable ? 'Ready (VoiceLive)' : 'Ready to Connect')}
             {status === 'starting' && 'Connecting...'}
             {status === 'active' && voiceLiveMode && 'Live Conversation'}
-            {status === 'active' && !voiceLiveMode && (isRecording ? 'Recording...' : isListening ? 'Listening (Server)...' : isSpeaking ? `${INTERVIEWER_NAME} is speaking...` : 'Your turn')}
+            {status === 'active' && !voiceLiveMode && (isRecording ? 'Recording...' : isListening ? 'Listening (Server)...' : isSpeaking ? `${interviewerName} is speaking...` : 'Your turn')}
             {status === 'processing' && 'Processing...'}
             {status === 'completed' && 'Call Ended'}
           </div>
@@ -636,15 +638,15 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
               fontSize: '1.5rem',
               fontWeight: 600,
               margin: '0 auto 16px',
-            }}>{INTERVIEWER_NAME.charAt(0)}</div>
-            <p>Click "Start Call" to connect with {INTERVIEWER_NAME} for your screening.</p>
+            }}>{interviewerName.charAt(0)}</div>
+            <p>Click "Start Call" to connect with {interviewerName} for your screening.</p>
           </div>
         )}
 
         {transcript.length === 0 && status === 'active' && voiceLiveMode && (
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
             <Loader2 size={32} className="spin" style={{ margin: '0 auto 16px' }} />
-            <p>{INTERVIEWER_NAME} is about to greet you...</p>
+            <p>{interviewerName} is about to greet you...</p>
             <p style={{ fontSize: '0.85rem' }}>Speak naturally - the conversation will appear here.</p>
           </div>
         )}
@@ -672,7 +674,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
               fontSize: entry.role === 'ai' ? '0.9rem' : undefined,
               fontWeight: entry.role === 'ai' ? 600 : undefined,
             }}>
-              {entry.role === 'ai' ? INTERVIEWER_NAME.charAt(0) : <User size={18} />}
+              {entry.role === 'ai' ? interviewerName.charAt(0) : <User size={18} />}
             </div>
             <div style={{
               maxWidth: '70%',
@@ -883,14 +885,14 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
           {status === 'active' && isSpeaking && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-muted)' }}>
               <Volume2 size={24} className="pulse" />
-              <span>{INTERVIEWER_NAME} is speaking...</span>
+              <span>{interviewerName} is speaking...</span>
             </div>
           )}
 
           {(status === 'starting' || status === 'processing') && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-muted)' }}>
               <Loader2 size={24} className="spin" />
-              <span>{status === 'starting' ? `Connecting to ${INTERVIEWER_NAME}...` : 'Processing...'}</span>
+              <span>{status === 'starting' ? `Connecting to ${interviewerName}...` : 'Processing...'}</span>
             </div>
           )}
         </div>

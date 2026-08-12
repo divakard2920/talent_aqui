@@ -144,6 +144,7 @@ function App() {
   const [activeTab, setActiveTab] = useState(getInitialTab);
   const [scrolled, setScrolled] = useState(false);
   const [toast, setToast] = useState(null);
+  const [interviewerName, setInterviewerName] = useState('Sage'); // Configurable interviewer name
   const [viewCandidateId, setViewCandidateId] = useState(() => {
     const id = getParam('candidate');
     return id ? parseInt(id) : null;
@@ -171,6 +172,21 @@ function App() {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Fetch interview config for interviewer name
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await interviewApi.getConfig();
+        if (res.data.interviewer_name) {
+          setInterviewerName(res.data.interviewer_name);
+        }
+      } catch (err) {
+        console.log('Could not fetch interview config:', err.message);
+      }
+    };
+    fetchConfig();
   }, []);
 
   // Check for special routes
@@ -2876,7 +2892,7 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
               <div style={{ background: 'linear-gradient(135deg, #E8EEF8 0%, #F0F4F8 100%)', padding: '16px', borderRadius: '16px', border: '1px solid var(--border-light)' }}>
                 <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: 'var(--brand-navy)' }}>Schedule L1 Screening Call</h4>
                 <p style={{ margin: '0 0 12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Connect this candidate with Devin for an initial screening call
+                  Connect this candidate with {interviewerName} for an initial screening call
                 </p>
                 {generatedInterviewLink ? (
                   <div style={{
@@ -3171,7 +3187,7 @@ function InterviewsView({ showToast }) {
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Screening Interviews</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>
-          L1 screening calls conducted by Devin
+          L1 screening calls conducted by {interviewerName}
         </p>
       </div>
 
@@ -4851,7 +4867,7 @@ function WalkInsView({ showToast }) {
         {driveView === 'interviews' && (
           <div className="sovereign-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0 }}>L1 Interviews with Devin</h3>
+              <h3 style={{ margin: 0 }}>L1 Interviews with {interviewerName}</h3>
               <button
                 onClick={async () => {
                   setLoadingInterviews(true);
@@ -5311,7 +5327,7 @@ function WalkInsView({ showToast }) {
                 padding: '16px',
               }}>
                 <h4 style={{ margin: '0 0 12px', fontSize: '0.9rem', color: selectedCandidate.interview_status === 'completed' ? '#4F46E5' : '#92400E' }}>
-                  L1 Interview with Devin
+                  L1 Interview with {interviewerName}
                 </h4>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                   {selectedCandidate.interview_status === 'completed' ? (
@@ -6471,7 +6487,7 @@ function GitHubView({ showToast }) {
   );
 }
 
-// --- Interview Portal (for candidates taking L1 interview with Devin) ---
+// --- Interview Portal (for candidates taking L1 interview) ---
 function InterviewPortal({ interviewId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -6480,6 +6496,22 @@ function InterviewPortal({ interviewId }) {
   const [job, setJob] = useState(null);
   const [completed, setCompleted] = useState(false);
   const [result, setResult] = useState(null);
+  const [interviewerName, setInterviewerName] = useState('Sage');
+
+  // Fetch interviewer name from config
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await interviewApi.getConfig();
+        if (res.data.interviewer_name) {
+          setInterviewerName(res.data.interviewer_name);
+        }
+      } catch (err) {
+        // Ignore - use default name
+      }
+    };
+    fetchConfig();
+  }, []);
 
   useEffect(() => {
     const loadInterview = async () => {
@@ -6579,7 +6611,7 @@ function InterviewPortal({ interviewId }) {
           <CheckCircle size={64} style={{ color: '#10B981', marginBottom: '20px' }} />
           <h2 style={{ margin: '0 0 12px', fontSize: '1.8rem' }}>Interview Complete!</h2>
           <p style={{ color: '#6B7280', margin: '0 0 16px', fontSize: '1.1rem' }}>
-            Thank you for completing your interview with Devin.
+            Thank you for completing your interview with {interviewerName}.
           </p>
           <p style={{ color: '#9CA3AF', fontSize: '0.9rem', margin: 0 }}>
             Our team will review your interview and get back to you soon.
@@ -7223,7 +7255,7 @@ function CandidateTestPortal({ driveId }) {
                   <CheckCircle size={24} /> Congratulations! You've been selected for L2 Interview
                 </h3>
                 <p style={{ margin: 0, color: '#166534' }}>
-                  You have successfully cleared the L1 interview with Devin. Our HR team will contact you shortly to schedule your L2 interview.
+                  You have successfully cleared the L1 interview with {interviewerName}. Our HR team will contact you shortly to schedule your L2 interview.
                 </p>
               </div>
             )}
@@ -7240,7 +7272,7 @@ function CandidateTestPortal({ driveId }) {
                   <Clock size={24} /> Interview Completed - Under Review
                 </h3>
                 <p style={{ margin: 0, color: '#4338CA' }}>
-                  Thank you for completing your interview with Devin. Our team is reviewing your interview and will update you shortly.
+                  Thank you for completing your interview with {interviewerName}. Our team is reviewing your interview and will update you shortly.
                 </p>
               </div>
             )}
@@ -7256,8 +7288,8 @@ function CandidateTestPortal({ driveId }) {
                 <h3 style={{ margin: '0 0 12px', color: '#166534' }}>Ready for Interview</h3>
                 <p style={{ margin: '0 0 16px', color: '#166534' }}>
                   {candidate?.interview_status
-                    ? 'Continue your Level 1 Interview with Devin.'
-                    : 'Click below to start your Level 1 Interview with Devin.'}
+                    ? `Continue your Level 1 Interview with ${interviewerName}.`
+                    : `Click below to start your Level 1 Interview with ${interviewerName}.`}
                 </p>
                 <button
                   onClick={async () => {
@@ -7288,7 +7320,7 @@ function CandidateTestPortal({ driveId }) {
                   }}
                 >
                   {loading ? <Loader2 size={18} className="spin" /> : <Phone size={18} />}
-                  {loading ? 'Loading...' : (candidate?.interview_status ? 'Resume Interview with Devin' : 'Start Interview with Devin')}
+                  {loading ? 'Loading...' : (candidate?.interview_status ? `Resume Interview with ${interviewerName}` : `Start Interview with ${interviewerName}`)}
                 </button>
               </div>
             )}
@@ -7306,7 +7338,7 @@ function CandidateTestPortal({ driveId }) {
                   <CheckCircle size={24} /> Congratulations! You've been selected for L2 Interview
                 </h3>
                 <p style={{ margin: 0, color: '#166534' }}>
-                  You have successfully cleared the L1 interview with Devin. Our HR team will contact you shortly to schedule your L2 interview.
+                  You have successfully cleared the L1 interview with {interviewerName}. Our HR team will contact you shortly to schedule your L2 interview.
                 </p>
               </div>
             )}
@@ -7323,7 +7355,7 @@ function CandidateTestPortal({ driveId }) {
                   <Clock size={24} /> Interview Completed - Under Review
                 </h3>
                 <p style={{ margin: 0, color: '#4338CA' }}>
-                  Thank you for completing your interview with Devin. Our team is reviewing your interview and will update you shortly.
+                  Thank you for completing your interview with {interviewerName}. Our team is reviewing your interview and will update you shortly.
                 </p>
               </div>
             )}
@@ -7339,8 +7371,8 @@ function CandidateTestPortal({ driveId }) {
                 <h3 style={{ margin: '0 0 12px', color: '#166534' }}>You've been Shortlisted!</h3>
                 <p style={{ margin: '0 0 16px', color: '#166534' }}>
                   {candidate?.interview_status
-                    ? 'Continue your Level 1 Interview with Devin.'
-                    : 'Congratulations! You are now eligible for Level 1 Interview with Devin.'}
+                    ? `Continue your Level 1 Interview with ${interviewerName}.`
+                    : `Congratulations! You are now eligible for Level 1 Interview with ${interviewerName}.`}
                 </p>
                 <button
                   onClick={async () => {
@@ -7373,7 +7405,7 @@ function CandidateTestPortal({ driveId }) {
                   }}
                 >
                   {loading ? <Loader2 size={18} className="spin" /> : <Phone size={18} />}
-                  {loading ? 'Loading...' : (candidate?.interview_status ? 'Resume Interview with Devin' : 'Start Interview with Devin')}
+                  {loading ? 'Loading...' : (candidate?.interview_status ? `Resume Interview with ${interviewerName}` : `Start Interview with ${interviewerName}`)}
                 </button>
               </div>
             )}

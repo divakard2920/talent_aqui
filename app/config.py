@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     voicelive_model: str = "gpt-4o-realtime-preview"
     voicelive_voice: str = "en-US-AvaNeural"
 
+    # Interviewer persona
+    interviewer_name: str = "Sage"
+    company_name: str = "Knorr-Bremse"
+
     class Config:
         env_file = ".env"
 
