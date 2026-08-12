@@ -18,6 +18,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
   const [voiceLiveAvailable, setVoiceLiveAvailable] = useState(false); // VoiceLive real-time streaming
   const [voiceLiveMode, setVoiceLiveMode] = useState(false); // Currently using VoiceLive
   const [interviewerName, setInterviewerName] = useState('Sage'); // Configurable interviewer name
+  const [aiSpeaking, setAiSpeaking] = useState(false); // Track when AI is speaking in VoiceLive
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -25,6 +26,8 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
   const streamRef = useRef(null);
   const textInputRef = useRef(null);
   const pollingRef = useRef(null);
+  const lastAiMessageCountRef = useRef(0); // Track AI message count for animation
+  const aiSpeakingTimeoutRef = useRef(null);
 
   // Fetch config on mount to check available modes
   useEffect(() => {
@@ -50,11 +53,28 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
         try {
           const res = await interviewApi.get(interview.id);
           if (res.data.transcript && res.data.transcript.length > 0) {
-            setTranscript(res.data.transcript.map(t => ({
+            const newTranscript = res.data.transcript.map(t => ({
               role: t.role === 'assistant' ? 'ai' : 'candidate',
               content: t.content,
               timestamp: t.timestamp,
-            })));
+            }));
+
+            // Check if new AI message arrived - trigger speaking animation
+            const aiMessages = newTranscript.filter(t => t.role === 'ai');
+            if (aiMessages.length > lastAiMessageCountRef.current) {
+              lastAiMessageCountRef.current = aiMessages.length;
+              setAiSpeaking(true);
+              // Clear any existing timeout
+              if (aiSpeakingTimeoutRef.current) {
+                clearTimeout(aiSpeakingTimeoutRef.current);
+              }
+              // Stop animation after 3 seconds
+              aiSpeakingTimeoutRef.current = setTimeout(() => {
+                setAiSpeaking(false);
+              }, 3000);
+            }
+
+            setTranscript(newTranscript);
           }
           if (res.data.status === 'completed') {
             // Only show completed if evaluation has real scores (not just generated in background)
@@ -75,6 +95,7 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
 
       return () => {
         if (pollingRef.current) clearInterval(pollingRef.current);
+        if (aiSpeakingTimeoutRef.current) clearTimeout(aiSpeakingTimeoutRef.current);
       };
     }
   }, [voiceLiveMode, status, interview.id, onComplete]);
@@ -139,6 +160,9 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
         await interviewApi.startVoiceLive(interview.id);
         setVoiceLiveMode(true);
         setStatus('active');
+        // AI will greet - show speaking animation
+        setAiSpeaking(true);
+        aiSpeakingTimeoutRef.current = setTimeout(() => setAiSpeaking(false), 4000);
         // Transcript will be updated via polling
       } catch (err) {
         setError(err.response?.data?.detail || 'Failed to start VoiceLive interview');
@@ -643,11 +667,58 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
           </div>
         )}
 
-        {transcript.length === 0 && status === 'active' && voiceLiveMode && (
-          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-            <Loader2 size={32} className="spin" style={{ margin: '0 auto 16px' }} />
-            <p>{interviewerName} is about to greet you...</p>
-            <p style={{ fontSize: '0.85rem' }}>Speak naturally - the conversation will appear here.</p>
+        {/* VoiceLive Call UI - Simple avatar with waves when speaking */}
+        {status === 'active' && voiceLiveMode && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '80px 20px',
+            minHeight: '300px',
+          }}>
+            <div style={{ position: 'relative' }}>
+              {/* Audio wave rings - show when speaking */}
+              {aiSpeaking && (
+                <>
+                  <div className="audio-wave-ring" style={{
+                    position: 'absolute',
+                    inset: '-12px',
+                    borderRadius: '50%',
+                    border: '3px solid #287A4F',
+                    animation: 'pulse-ring 1.5s ease-out infinite',
+                  }} />
+                  <div className="audio-wave-ring" style={{
+                    position: 'absolute',
+                    inset: '-24px',
+                    borderRadius: '50%',
+                    border: '2px solid #287A4F',
+                    animation: 'pulse-ring 1.5s ease-out infinite 0.3s',
+                  }} />
+                  <div className="audio-wave-ring" style={{
+                    position: 'absolute',
+                    inset: '-36px',
+                    borderRadius: '50%',
+                    border: '1px solid #287A4F',
+                    animation: 'pulse-ring 1.5s ease-out infinite 0.6s',
+                  }} />
+                </>
+              )}
+              <div style={{
+                width: '120px',
+                height: '120px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, var(--brand-navy) 0%, #1a365d 100%)',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '3rem',
+                fontWeight: 600,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+              }}>
+                {interviewerName.charAt(0)}
+              </div>
+            </div>
           </div>
         )}
 

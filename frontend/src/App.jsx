@@ -3490,7 +3490,7 @@ function InterviewsView({ showToast }) {
                                         fontWeight: 600,
                                         flexShrink: 0,
                                       }}>
-                                        {entry.role === 'assistant' ? 'D' : formatName(candidate?.name)?.charAt(0) || 'C'}
+                                        {entry.role === 'assistant' ? interviewerName.charAt(0) : formatName(candidate?.name)?.charAt(0) || 'C'}
                                       </div>
                                       <div style={{
                                         maxWidth: '80%',
