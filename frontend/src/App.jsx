@@ -1561,6 +1561,22 @@ function CandidatesView({ showToast, viewCandidateId, clearViewCandidateId }) {
   const [interviewJob, setInterviewJob] = useState(null);
   const [creatingInterview, setCreatingInterview] = useState(false);
   const [generatedInterviewLink, setGeneratedInterviewLink] = useState(null);
+  const [interviewerName, setInterviewerName] = useState('Sage');
+
+  // Fetch interviewer name from config
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await interviewApi.getConfig();
+        if (res.data.interviewer_name) {
+          setInterviewerName(res.data.interviewer_name);
+        }
+      } catch (err) {
+        // Ignore - use default
+      }
+    };
+    fetchConfig();
+  }, []);
 
   // Groups state
   const [groups, setGroups] = useState([]);
@@ -3115,6 +3131,22 @@ function InterviewsView({ showToast }) {
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState(null);
   const [expandedInterview, setExpandedInterview] = useState(null);
+  const [interviewerName, setInterviewerName] = useState('Sage');
+
+  // Fetch interviewer name from config
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await interviewApi.getConfig();
+        if (res.data.interviewer_name) {
+          setInterviewerName(res.data.interviewer_name);
+        }
+      } catch (err) {
+        // Ignore - use default
+      }
+    };
+    fetchConfig();
+  }, []);
 
   // URL state management
   useEffect(() => {
@@ -6652,6 +6684,22 @@ function CandidateTestPortal({ driveId }) {
   const [timeLeft, setTimeLeft] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [interviewerName, setInterviewerName] = useState('Sage');
+
+  // Fetch interviewer name from config
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await interviewApi.getConfig();
+        if (res.data.interviewer_name) {
+          setInterviewerName(res.data.interviewer_name);
+        }
+      } catch (err) {
+        // Ignore - use default
+      }
+    };
+    fetchConfig();
+  }, []);
 
   // Prevent browser refresh/close during test
   useEffect(() => {
