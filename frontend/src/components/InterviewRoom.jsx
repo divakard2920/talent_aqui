@@ -677,32 +677,28 @@ export function InterviewRoom({ interview, candidate, job, onComplete, onClose }
             minHeight: '300px',
           }}>
             <div style={{ position: 'relative' }}>
-              {/* Audio wave rings - show when speaking */}
-              {aiSpeaking && (
-                <>
-                  <div className="audio-wave-ring" style={{
-                    position: 'absolute',
-                    inset: '-12px',
-                    borderRadius: '50%',
-                    border: '3px solid #287A4F',
-                    animation: 'pulse-ring 1.5s ease-out infinite',
-                  }} />
-                  <div className="audio-wave-ring" style={{
-                    position: 'absolute',
-                    inset: '-24px',
-                    borderRadius: '50%',
-                    border: '2px solid #287A4F',
-                    animation: 'pulse-ring 1.5s ease-out infinite 0.3s',
-                  }} />
-                  <div className="audio-wave-ring" style={{
-                    position: 'absolute',
-                    inset: '-36px',
-                    borderRadius: '50%',
-                    border: '1px solid #287A4F',
-                    animation: 'pulse-ring 1.5s ease-out infinite 0.6s',
-                  }} />
-                </>
-              )}
+              {/* Audio wave rings - always show during live conversation */}
+              <div className="audio-wave-ring" style={{
+                position: 'absolute',
+                inset: '-12px',
+                borderRadius: '50%',
+                border: '3px solid #287A4F',
+                animation: 'pulse-ring 1.5s ease-out infinite',
+              }} />
+              <div className="audio-wave-ring" style={{
+                position: 'absolute',
+                inset: '-24px',
+                borderRadius: '50%',
+                border: '2px solid #287A4F',
+                animation: 'pulse-ring 1.5s ease-out infinite 0.3s',
+              }} />
+              <div className="audio-wave-ring" style={{
+                position: 'absolute',
+                inset: '-36px',
+                borderRadius: '50%',
+                border: '1px solid #287A4F',
+                animation: 'pulse-ring 1.5s ease-out infinite 0.6s',
+              }} />
               <div style={{
                 width: '120px',
                 height: '120px',
