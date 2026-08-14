@@ -1141,8 +1141,9 @@ async def shortlist_candidate(
 
     registration.status = RegistrationStatus.SHORTLISTED.value
     await db.commit()
+    await db.refresh(registration)
 
-    return {"status": "shortlisted"}
+    return {"status": registration.status, "registration_id": registration.id}
 
 
 @router.post("/{drive_id}/registrations/{registration_id}/reject")
@@ -1164,8 +1165,9 @@ async def reject_candidate(
 
     registration.status = RegistrationStatus.REJECTED.value
     await db.commit()
+    await db.refresh(registration)
 
-    return {"status": "rejected"}
+    return {"status": registration.status, "registration_id": registration.id}
 
 
 @router.post("/{drive_id}/registrations/{registration_id}/start-interview")
@@ -1424,8 +1426,9 @@ async def approve_for_l2(
     # Update status to indicate approved for L2
     registration.status = "approved_l2"
     await db.commit()
+    await db.refresh(registration)
 
-    return {"status": "approved_l2", "message": "Candidate approved for L2 interview"}
+    return {"status": registration.status, "registration_id": registration.id}
 
 
 @router.post("/{drive_id}/registrations/{registration_id}/reject-after-interview")
@@ -1447,8 +1450,9 @@ async def reject_after_interview(
 
     registration.status = RegistrationStatus.REJECTED.value
     await db.commit()
+    await db.refresh(registration)
 
-    return {"status": "rejected", "message": "Candidate rejected"}
+    return {"status": registration.status, "registration_id": registration.id}
 
 
 @router.post("/{drive_id}/registrations/{registration_id}/hold")
@@ -1470,5 +1474,6 @@ async def hold_candidate(
 
     registration.status = "on_hold"
     await db.commit()
+    await db.refresh(registration)
 
-    return {"status": "on_hold", "message": "Candidate put on hold"}
+    return {"status": registration.status, "registration_id": registration.id}
