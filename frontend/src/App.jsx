@@ -3538,6 +3538,7 @@ function WalkInsView({ showToast }) {
   const [generatingQuestions, setGeneratingQuestions] = useState(false);
   const [walkinRegistering, setWalkinRegistering] = useState(false);
   const [lastToken, setLastToken] = useState(null);
+  const [interviewerName, setInterviewerName] = useState('Sage');
   const [walkinForm, setWalkinForm] = useState({
     name: '',
     email: '',
@@ -3546,6 +3547,21 @@ function WalkInsView({ showToast }) {
     current_company: '',
     current_role: '',
   });
+
+  // Fetch interviewer name from config
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await interviewApi.getConfig();
+        if (res.data.interviewer_name) {
+          setInterviewerName(res.data.interviewer_name);
+        }
+      } catch (err) {
+        // Ignore - use default
+      }
+    };
+    fetchConfig();
+  }, []);
   const [resumeFile, setResumeFile] = useState(null);
   const [driveSearchTerm, setDriveSearchTerm] = useState('');
   const [driveStatusFilter, setDriveStatusFilter] = useState('all'); // all, ongoing, registration_open, draft, completed
