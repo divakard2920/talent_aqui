@@ -4848,7 +4848,8 @@ function WalkInsView({ showToast }) {
                           {entry.test_passed ? 'PASSED' : 'FAILED'}
                         </p>
                       </div>
-                      {entry.status !== 'shortlisted' && entry.status !== 'rejected' && (
+                      {/* Only show shortlist/reject for candidates not yet processed */}
+                      {!['shortlisted', 'rejected', 'approved_l2', 'on_hold', 'interviewing', 'interview_completed'].includes(entry.status) && (
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button
                             onClick={() => handleShortlist(entry.registration_id)}
@@ -4882,6 +4883,15 @@ function WalkInsView({ showToast }) {
                       )}
                       {entry.status === 'shortlisted' && (
                         <span className="chip chip-green">Shortlisted</span>
+                      )}
+                      {entry.status === 'approved_l2' && (
+                        <span className="chip" style={{ background: '#DBEAFE', color: '#1E40AF' }}>Approved L2</span>
+                      )}
+                      {entry.status === 'on_hold' && (
+                        <span className="chip" style={{ background: '#FEF3C7', color: '#92400E' }}>On Hold</span>
+                      )}
+                      {(entry.status === 'interviewing' || entry.status === 'interview_completed') && (
+                        <span className="chip" style={{ background: '#E0E7FF', color: '#4338CA' }}>Interviewed</span>
                       )}
                       {entry.status === 'rejected' && (
                         <span className="chip chip-navy">Rejected</span>
