@@ -1319,8 +1319,8 @@ async def get_drive_interviews(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Get all interviews for candidates registered in this specific drive.
-    This filters by both job_id AND candidate_ids from this drive's registrations.
+    Get interviews specifically linked to this drive's registrations.
+    Only returns interviews created through this walk-in drive (via interview_id on registration).
     """
     from app.models.candidate import Candidate
     from app.models.interview import Interview
@@ -1332,28 +1332,31 @@ async def get_drive_interviews(
     if not drive:
         raise HTTPException(status_code=404, detail="Drive not found")
 
-    # Get all candidate_ids from registrations in this drive
+    # Get all registrations with interview_id set (only interviews created for this drive)
     result = await db.execute(
-        select(DriveRegistration.candidate_id).where(
+        select(DriveRegistration).where(
             DriveRegistration.drive_id == drive_id,
-            DriveRegistration.candidate_id.isnot(None),
+            DriveRegistration.interview_id.isnot(None),
         )
     )
-    candidate_ids = result.scalars().all()
+    registrations = result.scalars().all()
 
-    if not candidate_ids:
+    if not registrations:
         return []
 
-    # Get interviews for these specific candidates AND this job
+    # Get the specific interview IDs linked to this drive
+    interview_ids = [reg.interview_id for reg in registrations]
+
+    # Get only those specific interviews
     result = await db.execute(
         select(Interview)
-        .where(
-            Interview.job_id == drive.job_id,
-            Interview.candidate_id.in_(candidate_ids),
-        )
+        .where(Interview.id.in_(interview_ids))
         .order_by(Interview.created_at.desc())
     )
     interviews = result.scalars().all()
+
+    # Create a map of interview_id -> registration for quick lookup
+    interview_to_reg = {reg.interview_id: reg for reg in registrations}
 
     # Build response with candidate info and registration info
     response = []
@@ -1370,14 +1373,8 @@ async def get_drive_interviews(
         )
         job = job_result.scalar_one_or_none()
 
-        # Get registration details for this candidate in this drive
-        reg_result = await db.execute(
-            select(DriveRegistration).where(
-                DriveRegistration.drive_id == drive_id,
-                DriveRegistration.candidate_id == interview.candidate_id,
-            )
-        )
-        registration = reg_result.scalar_one_or_none()
+        # Get the linked registration
+        registration = interview_to_reg.get(interview.id)
 
         response.append({
             "id": interview.id,
