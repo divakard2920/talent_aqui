@@ -5307,8 +5307,8 @@ function WalkInsView({ showToast }) {
                     fontSize: '0.75rem',
                     fontWeight: 600,
                     textTransform: 'uppercase',
-                    background: selectedCandidate.status === 'shortlisted' ? '#DCFCE7' : selectedCandidate.status === 'rejected' ? '#FEE2E2' : '#F3F4F6',
-                    color: selectedCandidate.status === 'shortlisted' ? '#166534' : selectedCandidate.status === 'rejected' ? '#991B1B' : '#4B5563',
+                    background: selectedCandidate.status === 'shortlisted' ? '#DCFCE7' : selectedCandidate.status === 'rejected' ? '#FEE2E2' : selectedCandidate.status === 'approved_l2' ? '#DCFCE7' : selectedCandidate.status === 'on_hold' ? '#FEF3C7' : '#F3F4F6',
+                    color: selectedCandidate.status === 'shortlisted' ? '#166534' : selectedCandidate.status === 'rejected' ? '#991B1B' : selectedCandidate.status === 'approved_l2' ? '#166534' : selectedCandidate.status === 'on_hold' ? '#92400E' : '#4B5563',
                   }}>
                     {selectedCandidate.status.replace('_', ' ')}
                   </span>
@@ -5421,7 +5421,7 @@ function WalkInsView({ showToast }) {
             )}
 
             {/* Action Buttons */}
-            {selectedCandidate.status !== 'shortlisted' && selectedCandidate.status !== 'rejected' && (
+            {!['shortlisted', 'rejected', 'approved_l2', 'on_hold', 'interviewing', 'interview_completed'].includes(selectedCandidate.status) && (
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                 <button
                   className="btn-sarvam"
